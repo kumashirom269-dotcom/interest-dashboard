@@ -38,4 +38,13 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# iOS (Capacitor) — Xcode/CocoaPodsが再生成できるものはコミットしない。
+# ios/App/App.xcworkspace・ios/App/App.xcodeproj・ios/App/App/ 配下のソース自体は
+# 通常コミット対象（Capacitorの標準構成）。
+ios/App/Pods/
+ios/App/build/
+ios/App/DerivedData/
+ios/**/xcuserdata/
+ios/.build/
 next-env.d.ts
