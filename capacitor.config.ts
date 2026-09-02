@@ -23,9 +23,13 @@ const config: CapacitorConfig = {
     cleartext: false,
   },
   ios: {
-    // ノッチ・ホームインジケーター周辺の余白はアプリ側（globals.css）のsafe-area対応に任せ、
-    // ネイティブ側のcontentInsetは自動調整のみ行う。
-    contentInset: "automatic",
+    // ノッチ・ホームインジケーター周辺の余白は、アプリ側（globals.css・env(safe-area-inset-*)）
+    // のCSSで完全に対応する。そのためcontentInsetは"never"にし、ネイティブ側
+    // （UIScrollView.contentInsetAdjustmentBehavior）による自動調整を無効化する
+    // （Capacitor公式のデフォルトも"never"。以前"automatic"にしていたところ、
+    // ネイティブ側の自動調整とCSS側のsafe-area対応が競合し、ヘッダーがステータスバーと
+    // 重なって表示される不具合が実機検証で見つかったため、デフォルトへ戻した）。
+    contentInset: "never",
     // 外部リンク（記事の元URL等）をアプリ内WebViewでそのまま開けるようにする
     // （Safariへ都度離脱させない。Server Actionsの動作にも影響しない）。
     allowsLinkPreview: false,
