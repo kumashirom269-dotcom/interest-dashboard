@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { optimizeFeedItemsWithAiAction, updatePreferredLanguage } from "./actions";
 import type { PreferredLanguage } from "@/lib/language/detectLanguage";
+import { DEV_TOOLS_ENABLED } from "@/lib/config/devTools";
 
 interface SettingsClientProps {
   preferredLanguage: PreferredLanguage;
@@ -97,31 +98,33 @@ export function SettingsClient({
         </div>
       </Card>
 
-      <Card className="flex flex-col gap-3 border-dashed border-amber-300 bg-amber-50">
-        <div>
-          <h2 className="text-sm font-semibold text-amber-800">
-            開発用：記事のAI最適化
-          </h2>
-          <p className="mt-0.5 text-xs text-amber-700">
-            未処理の記事（最新10件まで）にAIタイトル・AI要約・画像を生成します。AI APIの利用は課金に関わるため、手動実行のみで自動実行はしていません。
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={isOptimizing}
-            onClick={handleOptimizeFeedItems}
-          >
-            {isOptimizing ? "処理中..." : "記事タイトル・要約をAIで最適化"}
-          </Button>
-          {optimizeResultMessage && (
-            <span className="text-xs text-slate-600">
-              {optimizeResultMessage}
-            </span>
-          )}
-        </div>
-      </Card>
+      {DEV_TOOLS_ENABLED && (
+        <Card className="flex flex-col gap-3 border-dashed border-amber-300 bg-amber-50">
+          <div>
+            <h2 className="text-sm font-semibold text-amber-800">
+              開発用：記事のAI最適化
+            </h2>
+            <p className="mt-0.5 text-xs text-amber-700">
+              未処理の記事（最新10件まで）にAIタイトル・AI要約・画像を生成します。AI APIの利用は課金に関わるため、手動実行のみで自動実行はしていません。
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isOptimizing}
+              onClick={handleOptimizeFeedItems}
+            >
+              {isOptimizing ? "処理中..." : "記事タイトル・要約をAIで最適化"}
+            </Button>
+            {optimizeResultMessage && (
+              <span className="text-xs text-slate-600">
+                {optimizeResultMessage}
+              </span>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

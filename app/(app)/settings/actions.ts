@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai/generateFeedItemOptimization";
 import { resolveImageForFeedItem } from "@/lib/images/resolveArticleImage";
 import type { PreferredLanguage } from "@/lib/language/detectLanguage";
+import { DEV_TOOLS_ENABLED } from "@/lib/config/devTools";
 
 export async function updatePreferredLanguage(
   language: PreferredLanguage,
@@ -35,6 +36,13 @@ export interface OptimizeFeedItemsResult {
 // 一度処理した記事はai_processed_atが入るため、何度実行しても同じ記事を処理し直さない。
 // AI APIの利用は課金に関わるため、自動実行はせず、この開発用画面からの手動実行のみにしている。
 export async function optimizeFeedItemsWithAiAction(): Promise<OptimizeFeedItemsResult> {
+  // 開発用の手動実行専用機能。UIボタンはDEV_TOOLS_ENABLEDで隠しているが、
+  // Server Actionは呼び出し口さえわかれば直接叩けてしまうため、ここでも二重に拒否する
+  // （AI APIの課金が発生する操作のため、一般ユーザーには実行させない）。
+  if (!DEV_TOOLS_ENABLED) {
+    throw new Error("この機能は開発環境専用です。");
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

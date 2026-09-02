@@ -293,7 +293,7 @@ export function MypageClient({
           <Button size="sm" variant="ghost" onClick={() => setShowFeedItems((v) => !v)}>
             {showFeedItems
               ? "個別記事一覧を隠す"
-              : `個別記事一覧を表示する（${filteredItems.length}件・開発用）`}
+              : `個別記事一覧を表示する（${filteredItems.length}件）`}
           </Button>
           {showFeedItems && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">

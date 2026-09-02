@@ -17,6 +17,7 @@ import {
   type WebDiscoveryResult,
 } from "@/lib/web-discovery/discoverLinks";
 import type { FetchMethod, SourceStatus, SourceType } from "@/types/domain";
+import { DEV_TOOLS_ENABLED } from "@/lib/config/devTools";
 
 async function getAuthedUserId() {
   const supabase = await createClient();
@@ -123,6 +124,13 @@ export async function updateSourceSettings(
 export async function createSampleSource(
   topicId: string,
 ): Promise<SourceWithTopic> {
+  // 開発用の動作確認専用機能。UIボタンはDEV_TOOLS_ENABLEDで隠しているが、Server Actionは
+  // 呼び出し口さえわかれば直接叩けてしまうため、ここでも二重に拒否する
+  // （実データに"サンプル収集元"というダミー行を混入させたくないため）。
+  if (!DEV_TOOLS_ENABLED) {
+    throw new Error("この機能は開発環境専用です。");
+  }
+
   const { supabase, userId } = await getAuthedUserId();
 
   const { data: topic, error: topicError } = await supabase
@@ -379,6 +387,13 @@ export async function fetchAndSaveRssForSource(
 }
 
 export async function fetchActiveSourcesRss(): Promise<FetchRssResult> {
+  // 開発用の動作確認専用機能（全active収集元を対象にした一括RSS再取得）。
+  // UIボタンはDEV_TOOLS_ENABLEDで隠しているが、Server Actionは呼び出し口さえわかれば
+  // 直接叩けてしまうため、ここでも二重に拒否する。
+  if (!DEV_TOOLS_ENABLED) {
+    throw new Error("この機能は開発環境専用です。");
+  }
+
   const { supabase, userId } = await getAuthedUserId();
   const preferredLanguage = await getPreferredFeedLanguageForUser();
 

@@ -7,6 +7,7 @@ import { SourceCard } from "@/components/sources/SourceCard";
 import { TOPIC_ENTITY_TYPE_LABELS } from "@/lib/topic-classification/types";
 import type { TopicClassification } from "@/lib/topic-classification/types";
 import { TopicPreferencesForm } from "./TopicPreferencesForm";
+import { DEV_TOOLS_ENABLED } from "@/lib/config/devTools";
 import {
   DESIRED_CONTENT_TYPE_LABELS,
   DISPLAY_TONE_LABELS,
@@ -348,35 +349,37 @@ export function TopicList({
 
             <TopicPreferenceCategoriesSummary categories={topicCategories} />
 
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50 p-2.5">
-              <span className="text-xs font-semibold text-amber-700">
-                開発用：
-              </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={isClassifying}
-                onClick={() => onClassifyTopic(topic.id)}
-              >
-                {isClassifying ? "分類中..." : "AIで再分類する"}
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={isGenerating}
-                onClick={() => onGenerateSources(topic.id)}
-              >
-                {isGenerating ? "生成中..." : "収集元候補を再生成する"}
-              </Button>
-              <span className="text-[11px] text-amber-700">
-                （登録時に自動実行済み。品質確認・再実行用）
-              </span>
-              {justGenerated && (
-                <span className="text-xs font-medium text-emerald-600">
-                  候補を生成しました
+            {DEV_TOOLS_ENABLED && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50 p-2.5">
+                <span className="text-xs font-semibold text-amber-700">
+                  開発用：
                 </span>
-              )}
-            </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isClassifying}
+                  onClick={() => onClassifyTopic(topic.id)}
+                >
+                  {isClassifying ? "分類中..." : "AIで再分類する"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isGenerating}
+                  onClick={() => onGenerateSources(topic.id)}
+                >
+                  {isGenerating ? "生成中..." : "収集元候補を再生成する"}
+                </Button>
+                <span className="text-[11px] text-amber-700">
+                  （登録時に自動実行済み。品質確認・再実行用）
+                </span>
+                {justGenerated && (
+                  <span className="text-xs font-medium text-emerald-600">
+                    候補を生成しました
+                  </span>
+                )}
+              </div>
+            )}
 
             {isEditingPreferences ? (
               <TopicPreferencesForm
