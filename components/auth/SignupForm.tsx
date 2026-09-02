@@ -2,6 +2,7 @@
 
 import { useState, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 
@@ -9,6 +10,7 @@ export function SignupForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -16,6 +18,12 @@ export function SignupForm() {
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
+
+    if (!agreedToTerms) {
+      setErrorMessage("利用規約とプライバシーポリシーへの同意が必要です。");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -90,13 +98,40 @@ export function SignupForm() {
         />
       </div>
 
+      <label className="flex items-start gap-2 text-xs text-slate-600">
+        <input
+          type="checkbox"
+          checked={agreedToTerms}
+          onChange={(e) => setAgreedToTerms(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          <Link
+            href="/terms"
+            target="_blank"
+            className="font-medium text-slate-900 underline underline-offset-2"
+          >
+            利用規約
+          </Link>
+          および
+          <Link
+            href="/privacy"
+            target="_blank"
+            className="font-medium text-slate-900 underline underline-offset-2"
+          >
+            プライバシーポリシー
+          </Link>
+          に同意します
+        </span>
+      </label>
+
       {errorMessage && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
           {errorMessage}
         </p>
       )}
 
-      <Button type="submit" variant="primary" disabled={submitting}>
+      <Button type="submit" variant="primary" disabled={submitting || !agreedToTerms}>
         {submitting ? "登録中..." : "新規登録"}
       </Button>
     </form>

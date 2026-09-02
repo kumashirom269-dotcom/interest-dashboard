@@ -97,6 +97,7 @@ import { discoverLinksForUrl } from "@/lib/web-discovery/discoverLinks";
 import { isWebDiscoveryEligible } from "@/lib/web-discovery/eligibility";
 import { fetchWebPageSummary } from "@/lib/web-discovery/fetchWebPageSummary";
 import { AI_COST_SAVING_MODE, AI_LIMITS } from "@/lib/config/aiLimits";
+import { checkAndRecordRateLimit, type RateLimitWindow } from "@/lib/rate-limit/queries";
 import { isAiCreditOrBillingError } from "@/lib/ai/aiErrorHelpers";
 import type { InformationType } from "@/lib/recommendation-cards/types";
 import type { FetchMethod, Topic } from "@/types/domain";
@@ -201,6 +202,20 @@ export async function deleteTopic(topicId: string): Promise<void> {
 
   revalidatePath("/topics");
 }
+
+// トピック登録フローのレート制限（一般公開に向けた対応）。
+// identifyTopicAction・previewTopicRegistrationはAI呼び出し1〜2回程度と比較的軽いが、
+// 確認せず何度も叩ける導線のため合算して緩めに制限する。confirmTopicRegistrationは
+// runInitialAutoCollection（AI呼び出し数回＋検索API呼び出し十数回）を伴う最も重い処理のため、
+// より厳しく制限する。値は「通常利用では実質引っかからない・機械的な連打だけ止める」水準を狙う。
+const TOPIC_PREVIEW_RATE_LIMIT_WINDOWS: RateLimitWindow[] = [
+  { windowMs: 60 * 60 * 1000, maxCount: 40, label: "1時間あたり" },
+  { windowMs: 24 * 60 * 60 * 1000, maxCount: 150, label: "1日あたり" },
+];
+const TOPIC_CONFIRM_RATE_LIMIT_WINDOWS: RateLimitWindow[] = [
+  { windowMs: 60 * 60 * 1000, maxCount: 10, label: "1時間あたり" },
+  { windowMs: 24 * 60 * 60 * 1000, maxCount: 30, label: "1日あたり" },
+];
 
 const PLACEHOLDER_ID_PATTERN = /x{4,}/i;
 
@@ -523,7 +538,17 @@ export async function identifyTopicAction(
   input: TopicInput,
   additionalInfoHistory: string[] = [],
 ): Promise<TopicIdentificationResult> {
-  await getAuthedUserId();
+  const { supabase, userId } = await getAuthedUserId();
+
+  const rateLimit = await checkAndRecordRateLimit(
+    supabase,
+    userId,
+    "topic_registration_preview",
+    TOPIC_PREVIEW_RATE_LIMIT_WINDOWS,
+  );
+  if (!rateLimit.allowed) {
+    throw new Error(rateLimit.message);
+  }
 
   const youtubeMatch = findYouTubeChannelUrlInHistory(additionalInfoHistory);
   let youtubeContext: string | undefined;
@@ -592,7 +617,17 @@ export async function previewTopicRegistration(
   identifiedEntity: IdentifiedEntity,
   additionalInfoHistory: string[] = [],
 ): Promise<TopicRegistrationPreview> {
-  await getAuthedUserId();
+  const { supabase, userId } = await getAuthedUserId();
+
+  const rateLimit = await checkAndRecordRateLimit(
+    supabase,
+    userId,
+    "topic_registration_preview",
+    TOPIC_PREVIEW_RATE_LIMIT_WINDOWS,
+  );
+  if (!rateLimit.allowed) {
+    throw new Error(rateLimit.message);
+  }
 
   const context = buildIdentifiedContext(identifiedEntity, additionalInfoHistory);
   let classification: TopicClassification;
@@ -1827,18 +1862,13 @@ async function runInitialAutoCollection(
         };
 
         // high・criticalカードはジャンル・informationTypeに応じた警告が必須（レビュー指摘#3）。
-        // 生成できない場合はカード化を見送る（安全側でhold据え置き）。
+        // buildHighRiskWarningsは常に1件以上の警告（ジャンル固有、無ければ汎用の確認喚起文）
+        // を返すため、warnings=[]でカード化されることはない。
         const cardWarnings = buildHighRiskWarnings({
           genreId: classification.understanding.primaryGenreId,
           informationTypes: classification.understanding.informationTypes,
           riskLevel: cardRiskLevel,
         });
-        if (cardWarnings === null) {
-          result.warnings.push(
-            `「${representative.title}」は${cardRiskLevel}リスクの警告文を生成できなかったため、今回はカード化を見送りました。`,
-          );
-          continue;
-        }
 
         cardInputs.push({
           topicId,
@@ -1926,6 +1956,19 @@ export async function confirmTopicRegistration(
 }> {
   if (classification.identificationStatus !== "identified") {
     throw new Error("対象が特定できていないため、トピックを登録できません。");
+  }
+
+  {
+    const { supabase, userId } = await getAuthedUserId();
+    const rateLimit = await checkAndRecordRateLimit(
+      supabase,
+      userId,
+      "topic_registration_confirm",
+      TOPIC_CONFIRM_RATE_LIMIT_WINDOWS,
+    );
+    if (!rateLimit.allowed) {
+      throw new Error(rateLimit.message);
+    }
   }
 
   const topic = await createTopic(input);

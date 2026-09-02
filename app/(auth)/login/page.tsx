@@ -14,6 +14,15 @@ export default function LoginPage() {
       <LoginForm />
 
       <p className="text-center text-sm text-slate-500">
+        <Link
+          href="/reset-password"
+          className="font-medium text-slate-900 underline underline-offset-2"
+        >
+          パスワードをお忘れですか？
+        </Link>
+      </p>
+
+      <p className="text-center text-sm text-slate-500">
         アカウントをお持ちでない方は{" "}
         <Link
           href="/signup"

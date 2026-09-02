@@ -33,6 +33,15 @@ export default function TopPage() {
             マイページを見る
           </Link>
         </div>
+
+        <div className="flex gap-4 text-xs text-slate-400">
+          <Link href="/terms" className="underline underline-offset-2 hover:text-slate-600">
+            利用規約
+          </Link>
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-slate-600">
+            プライバシーポリシー
+          </Link>
+        </div>
       </div>
     </div>
   );

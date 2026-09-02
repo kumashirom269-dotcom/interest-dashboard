@@ -1,7 +1,13 @@
 // high/criticalリスクのカードに必須で付与する警告文（レビュー指摘#3）。
 // riskLevelがhigh/criticalなのにwarnings=[]で保存される事例が実機検証で見つかったため、
-// ジャンル・informationTypeに応じた注意喚起を機械的に生成する。生成できない場合は
-// 呼び出し側でカード化を見送り（hold）にする判断材料として、空配列ではなくnullを返す。
+// ジャンル・informationTypeに応じた注意喚起を機械的に生成する。
+//
+// 常に少なくとも1件以上の警告（ジャンル固有の詳細警告、無ければ汎用の確認喚起文）を返し、
+// null（生成不能につきhold）は返さない。以前はnullを「カード化見送りの判断材料」として
+// 呼び出し側に渡す設計だったが、実装上どの入力でも必ず配列を返すため、その分岐は
+// 到達不能なまま残っていた（呼び出し側の`if (cardWarnings === null)`は常にfalse）。
+// 「high/criticalのカードにwarnings=[]は許さない」という本来の目的は、この汎用フォール
+// バックによって既に満たされているため、null分岐は廃止し実装と型を一致させている。
 import type { RiskLevel } from "@/lib/genres/types";
 
 const PET_HEALTH_INFORMATION_TYPES = new Set([
@@ -21,7 +27,7 @@ export function buildHighRiskWarnings(input: {
   genreId: string;
   informationTypes: string[];
   riskLevel: RiskLevel;
-}): string[] | null {
+}): string[] {
   if (input.riskLevel !== "high" && input.riskLevel !== "critical") return [];
 
   if (

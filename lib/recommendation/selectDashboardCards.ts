@@ -50,6 +50,18 @@ function cardScore(card: RecommendationCard): number {
   return card.informationValueScore ?? 50;
 }
 
+// スコア未計算（informationValueScore === null）のカードは、品質基準の足切り対象にせず
+// 中立扱いで通す（SelectDashboardCardsOptions.minQualityScoreのコメント参照）。
+// cardScore()はソート順を安定させるために便宜上50点を割り当てるが、この50という値を
+// そのまま閾値（55等）と比較すると、未計算カードが「品質基準未満」として誤って
+// 除外されてしまう（ドキュメントに反する動作になっていた）ため、足切り判定はスコアの
+// 有無を別途見る。
+function passesQualityGate(card: RecommendationCard, threshold: number): boolean {
+  return (
+    isHighPriority(card) || card.informationValueScore === null || cardScore(card) >= threshold
+  );
+}
+
 // 仕様書7-4・レビュー指摘の8段階選定順（2回目レビューで2→3を明確化）:
 // 1. 現在有効なcritical・high情報を確保
 // 2. 品質基準を満たす各トピックの最上位1件を確保（情報タイプ・ソース上限を無視してでも
@@ -87,7 +99,7 @@ export function selectDashboardCards(
   // 選定対象から完全に除外する（優先度を下げるだけでなく、そもそも候補にしない）。
   // トピック最低枠の確保も、この時点で除外された（品質基準未満・期限切れ相当の）
   // カードにまでは適用しない。
-  const eligible = deduped.filter((c) => isHighPriority(c) || cardScore(c) >= opts.minQualityScore);
+  const eligible = deduped.filter((c) => passesQualityGate(c, opts.minQualityScore));
 
   const sorted = [...eligible].sort((a, b) => {
     // 1. critical/highを最優先
@@ -141,8 +153,8 @@ export function selectDashboardCards(
   // ここだけはminQualityScoreではなくminQualityScoreForTopicMinimum（緩い下限）を使う
   // （実データ検証: 「嵐」のような一般的なトピックで最善のカードが51〜53点にとどまり、
   // minQualityScore=55だと登録トピックが丸ごと0件表示になっていた事例への対応）。
-  const minimumGuaranteeEligible = deduped.filter(
-    (c) => isHighPriority(c) || cardScore(c) >= opts.minQualityScoreForTopicMinimum,
+  const minimumGuaranteeEligible = deduped.filter((c) =>
+    passesQualityGate(c, opts.minQualityScoreForTopicMinimum),
   );
   const bestPerTopic = new Map<string, RecommendationCard>();
   for (const card of minimumGuaranteeEligible) {
