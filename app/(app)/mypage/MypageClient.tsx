@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CompactFeedCard } from "@/components/feed/CompactFeedCard";
-import { RecommendationCardView } from "@/components/feed/RecommendationCardView";
+import { CompactRecommendationCardView } from "@/components/feed/CompactRecommendationCardView";
 import {
   recordRecommendationCardClickAction,
   toggleReaction,
@@ -256,9 +256,9 @@ export function MypageClient({
           <h2 className="text-sm font-semibold text-slate-700">
             おすすめ情報（自動収集）
           </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="flex flex-col gap-2">
             {filteredRecommendationCards.map((card) => (
-              <RecommendationCardView
+              <CompactRecommendationCardView
                 key={card.id}
                 card={card}
                 reactionTypes={cardReactionsByCard[card.id] ?? []}
