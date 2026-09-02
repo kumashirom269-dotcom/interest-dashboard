@@ -1719,6 +1719,28 @@ async function runInitialAutoCollection(
       let aiCardGenerationUnavailable = false;
       let suppressedDuplicateCount = 0;
 
+      // 実在の人物・グループ等（entity_topic）で、記事ごとの画像候補が1件も見つからない場合の
+      // フォールバック（レビュー指摘: 「画像なし」が多発する問題への対応）。
+      // カテゴリ共通のプレースホルダー（誤認防止のためselectCardImageが意図的に避けている）
+      // ではなく、トピック自身の検証済み公式サイト（classification.officialUrl）の
+      // og:imageを「トピックの代表写真」として使う。実在対象そのもの・公式ソースの画像で
+      // あるため、汎用プレースホルダーと違って誤認のリスクが無い。
+      // カード生成ループの中で毎回fetchすると同じURLに何度もアクセスすることになるため、
+      // このトピックの処理中は1回だけ取得してキャッシュする（見つからない/公式URL未設定の
+      // 場合はnullのままキャッシュし、以降は再試行しない）。
+      const topicRepresentativeImage: { fetched: boolean; url: string | null } = {
+        fetched: false,
+        url: null,
+      };
+      async function getTopicRepresentativeImageUrl(): Promise<string | null> {
+        if (topicRepresentativeImage.fetched) return topicRepresentativeImage.url;
+        topicRepresentativeImage.fetched = true;
+        if (!classification.officialUrl) return null;
+        const summary = await fetchWebPageSummary(classification.officialUrl);
+        topicRepresentativeImage.url = summary.fetchStatus === "success" ? summary.imageUrl : null;
+        return topicRepresentativeImage.url;
+      }
+
       for (const entry of entries) {
         let cluster = entry.cluster;
         const representative = entry.representative;
@@ -1845,11 +1867,27 @@ async function runInitialAutoCollection(
             publishedAt: item.publishedAt || null,
             sourceImageSourceType: "article_thumbnail",
           }));
-        const selectedImage = selectCardImage(imageCandidates, {
+        let selectedImage = selectCardImage(imageCandidates, {
           entityName: classification.understanding.entityName,
           entityType: classification.entityType,
           topicKind: classification.understanding.topicKind,
         });
+
+        // 記事ごとの画像候補が無く（誤認防止のためカテゴリ共通画像も使えず）「画像なし」に
+        // なった場合、トピック自身の検証済み公式サイトの写真を代表画像として使う
+        // （レビュー指摘）。あくまで最後の手段のフォールバックであり、記事固有の画像が
+        // 見つかった場合はそちらを優先する（selectedImage.imageUrlが既にある場合はここに来ない）。
+        if (!selectedImage.imageUrl && classification.understanding.topicKind === "entity_topic") {
+          const representativeUrl = await getTopicRepresentativeImageUrl();
+          if (representativeUrl) {
+            selectedImage = {
+              ...selectedImage,
+              imageUrl: representativeUrl,
+              imageSourceType: "official_site",
+              imageSourceUrl: classification.officialUrl ?? null,
+            };
+          }
+        }
 
         const genreConfigForCard = getGenreConfig(classification.understanding.primaryGenreId);
         const cardRiskLevel = genreConfigForCard?.defaultRiskLevel ?? "normal";

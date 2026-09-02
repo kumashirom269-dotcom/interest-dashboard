@@ -11,6 +11,7 @@ import {
   type PreferredLanguage,
 } from "@/lib/language/detectLanguage";
 import { isWebDiscoveryEligible } from "@/lib/web-discovery/eligibility";
+import { fetchWebPageSummary } from "@/lib/web-discovery/fetchWebPageSummary";
 import {
   discoverLinksForUrl,
   type DiscoveredLink,
@@ -261,6 +262,9 @@ async function persistFetchDiagnostics(
     .eq("id", sourceId);
 }
 
+// 1回のRSS取得あたり、ページog:image補完を試みる最大件数（レイテンシ上限のため）。
+const RSS_OG_IMAGE_FETCH_LIMIT = 12;
+
 export interface FetchableSource {
   id: string;
   topic_id: string;
@@ -320,6 +324,26 @@ export async function fetchAndSaveRssForSource(
         errorType: "all_skipped_by_language",
         errorMessage: "言語設定によりすべての記事がスキップされました",
       };
+    }
+
+    // RSSの<enclosure>に画像が無い記事は、元記事ページのog:imageをベストエフォートで
+    // 補完する（レビュー指摘: 「画像なし」の頻発対応）。以前はこの補完を設定画面の
+    // 開発用AI最適化ボタンからの手動実行時にしか行っておらず、通常の自動収集では
+    // 一度もOGP画像を探しに行っていなかった。AI APIは使わない単純なHTTP取得のため、
+    // 課金は発生しない（AIタイトル・要約の生成とは別物）。
+    // 1回のRSS取得あたりの対象件数は、収集全体のレイテンシに悪影響が出ないよう
+    // 上限を設け、並列取得する（1件あたり最大6秒のタイムアウト、失敗しても無視）。
+    const itemsMissingImage = items.filter((item) => !item.image_url);
+    const targetsForOgImage = itemsMissingImage.slice(0, RSS_OG_IMAGE_FETCH_LIMIT);
+    if (targetsForOgImage.length > 0) {
+      const results = await Promise.allSettled(
+        targetsForOgImage.map((item) => fetchWebPageSummary(item.url)),
+      );
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled" && result.value.imageUrl) {
+          targetsForOgImage[index].image_url = result.value.imageUrl;
+        }
+      });
     }
 
     const { data: inserted, error: insertError } = await supabase
