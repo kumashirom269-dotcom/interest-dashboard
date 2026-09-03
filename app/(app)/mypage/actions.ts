@@ -26,6 +26,9 @@ export async function toggleRecommendationCardReactionAction(
 ): Promise<RecommendationCardReactionType[]> {
   const result = await toggleRecommendationCardReaction(recommendationCardId, reactionType);
   revalidatePath("/mypage");
+  // save/hideの切り替えは保存済み一覧（/saved）の内容にも影響するため、
+  // そちらも合わせて再検証する（レビュー指摘: 保存したカードが/savedに出ない問題）。
+  revalidatePath("/saved");
   return result;
 }
 
