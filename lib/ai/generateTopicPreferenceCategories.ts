@@ -6,6 +6,7 @@ import {
   type PreferenceCategoryType,
 } from "@/lib/topic-preferences/types";
 import type { TopicClassification } from "@/lib/topic-classification/types";
+import { parseAiJsonSafely } from "./parseAiJsonSafely";
 
 const client = new Anthropic();
 
@@ -185,7 +186,13 @@ export async function generateTopicPreferenceCategories(
     throw new Error("AIの応答からテキストを取得できませんでした。");
   }
 
-  const parsed = JSON.parse(textBlock.text) as { categories: RawCategory[] };
+  const parseResult = parseAiJsonSafely<{ categories: RawCategory[] }>(textBlock.text);
+  if (!parseResult.ok) {
+    throw new Error(
+      `AIの応答（興味カテゴリ提案）のJSON解析に失敗しました: ${parseResult.errorMessage} / 応答: ${parseResult.responsePreview}`,
+    );
+  }
+  const parsed = parseResult.data;
 
   const seenKeys = new Set<string>();
   const categories = parsed.categories

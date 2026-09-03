@@ -19,6 +19,7 @@ import type { TopicPreferenceCategory } from "@/lib/topic-preferences/types";
 import { getGenreConfig } from "@/lib/genres/genreConfigs";
 import type { GenreDetailedConfig } from "@/lib/genres/types";
 import { AI_LIMITS } from "@/lib/config/aiLimits";
+import { parseAiJsonSafely } from "./parseAiJsonSafely";
 
 const client = new Anthropic();
 
@@ -460,7 +461,13 @@ export async function generateResearchPlan(
     throw new Error("AIの応答からテキストを取得できませんでした。");
   }
 
-  const parsed = JSON.parse(textBlock.text) as RawResearchPlan;
+  const parseResult = parseAiJsonSafely<RawResearchPlan>(textBlock.text);
+  if (!parseResult.ok) {
+    throw new Error(
+      `AIの応答（リサーチ方針）のJSON解析に失敗しました: ${parseResult.errorMessage} / 応答: ${parseResult.responsePreview}`,
+    );
+  }
+  const parsed = parseResult.data;
   const u = input.classification.understanding;
   const genreConfig = getGenreConfig(u.primaryGenreId);
   const freshnessPolicy = normalizeFreshnessPolicy(parsed.freshnessPolicy);

@@ -19,6 +19,7 @@ import { GENRE_DEFINITIONS, isValidGenreId } from "@/lib/genres/definitions";
 import { deriveLegacyCategoryFields } from "@/lib/genres/genreConfigs";
 import { INFORMATION_TYPES, isValidInformationType } from "@/lib/genres/informationTypes";
 import { findApplicableCrossGenreRules } from "@/lib/genres/crossGenreRules";
+import { parseAiJsonSafely } from "./parseAiJsonSafely";
 
 const SOURCE_TYPES: SourceType[] = [
   "official_blog",
@@ -663,7 +664,12 @@ export async function classifyTopic(
     throw new Error("AIの応答からテキストを取得できませんでした。");
   }
 
-  const parsed = JSON.parse(textBlock.text) as RawTopicClassification;
+  const parseResult = parseAiJsonSafely<RawTopicClassification>(textBlock.text);
+  if (!parseResult.ok) {
+    throw new Error(
+      `AIの応答（トピック分類）のJSON解析に失敗しました: ${parseResult.errorMessage} / 応答: ${parseResult.responsePreview}`,
+    );
+  }
 
-  return normalizeClassification(topicName, parsed, context);
+  return normalizeClassification(topicName, parseResult.data, context);
 }

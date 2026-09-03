@@ -4,6 +4,7 @@ import type { TopicClassification, TopicUnderstanding } from "@/lib/topic-classi
 import type { ResearchPlan } from "@/lib/research/types";
 import { AI_LIMITS } from "@/lib/config/aiLimits";
 import { getGenreConfig } from "@/lib/genres/genreConfigs";
+import { parseAiJsonSafely } from "./parseAiJsonSafely";
 
 const client = new Anthropic();
 
@@ -291,7 +292,16 @@ ${buildArticlesText(input.articles)}`,
     throw new Error("AIの応答からテキストを取得できませんでした。");
   }
 
-  const parsed = JSON.parse(textBlock.text) as GeneratedRecommendationCard;
+  // max_tokens到達による途中切れ・markdownコードブロックでの囲み等、生のJSON.parseでは
+  // 復帰できない応答にも耐性を持たせる（vetResearchCandidates.tsで実際に発生した障害と
+  // 同じ障害モードのため、他のAI呼び出し関数にも同じガードを揃える）。
+  const parseResult = parseAiJsonSafely<GeneratedRecommendationCard>(textBlock.text);
+  if (!parseResult.ok) {
+    throw new Error(
+      `AIの応答（おすすめ情報カード）のJSON解析に失敗しました: ${parseResult.errorMessage} / 応答: ${parseResult.responsePreview}`,
+    );
+  }
+  const parsed = parseResult.data;
 
   return {
     ...parsed,

@@ -12,6 +12,7 @@ import {
   type TopicPreferenceSettings,
 } from "@/lib/topic-preference-settings/types";
 import type { SourceType } from "@/types/domain";
+import { parseAiJsonSafely } from "./parseAiJsonSafely";
 
 const SOURCE_TYPES: SourceType[] = [
   "official_blog",
@@ -279,7 +280,13 @@ confidence/search_query/expected_contentは、reasonの文章に自然な形で�
     expected_content: string;
   }
 
-  const parsed = JSON.parse(textBlock.text) as { candidates: RawCandidate[] };
+  const parseResult = parseAiJsonSafely<{ candidates: RawCandidate[] }>(textBlock.text);
+  if (!parseResult.ok) {
+    throw new Error(
+      `AIの応答（収集元候補）のJSON解析に失敗しました: ${parseResult.errorMessage} / 応答: ${parseResult.responsePreview}`,
+    );
+  }
+  const parsed = parseResult.data;
 
   return parsed.candidates.map((c) => ({
     name: c.name,

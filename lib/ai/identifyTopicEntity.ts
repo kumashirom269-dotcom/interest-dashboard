@@ -9,6 +9,7 @@ import {
   type TopicKind,
 } from "@/lib/topic-identification/types";
 import { preliminaryTopicExploration } from "@/lib/topic-identification/preliminaryTopicExploration";
+import { parseAiJsonSafely } from "./parseAiJsonSafely";
 
 const client = new Anthropic();
 
@@ -367,7 +368,13 @@ export async function identifyTopicEntity(
     throw new Error("AIの応答からテキストを取得できませんでした。");
   }
 
-  const parsed = JSON.parse(textBlock.text) as RawIdentificationResult;
+  const parseResult = parseAiJsonSafely<RawIdentificationResult>(textBlock.text);
+  if (!parseResult.ok) {
+    throw new Error(
+      `AIの応答（対象特定）のJSON解析に失敗しました: ${parseResult.errorMessage} / 応答: ${parseResult.responsePreview}`,
+    );
+  }
+  const parsed = parseResult.data;
   const identificationStatus = normalizeStatus(parsed.identificationStatus);
   const identifiedEntity =
     identificationStatus === "identified"

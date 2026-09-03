@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { TopicClassification } from "@/lib/topic-classification/types";
+import { parseAiJsonSafely } from "./parseAiJsonSafely";
 
 const client = new Anthropic();
 
@@ -81,5 +82,11 @@ export async function generateFeedItemOptimization(
     throw new Error("AIの応答からテキストを取得できませんでした。");
   }
 
-  return JSON.parse(textBlock.text) as GeneratedFeedItemOptimization;
+  const parseResult = parseAiJsonSafely<GeneratedFeedItemOptimization>(textBlock.text);
+  if (!parseResult.ok) {
+    throw new Error(
+      `AIの応答（記事最適化）のJSON解析に失敗しました: ${parseResult.errorMessage} / 応答: ${parseResult.responsePreview}`,
+    );
+  }
+  return parseResult.data;
 }
