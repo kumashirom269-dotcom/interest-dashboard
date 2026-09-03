@@ -528,10 +528,13 @@ export async function vetResearchCandidates(
     batches.push(clustersForAi.slice(i, i + batchSize));
   }
 
+  // 各バッチは独立したAnthropic API呼び出しで、他バッチの結果に依存しないため並列実行する
+  // （レビュー指摘: 逐次awaitだとバッチ数×1回分のレイテンシがそのまま積み上がっていた）。
   const failures: VettingBatchFailure[] = [];
-
-  for (let i = 0; i < batches.length; i++) {
-    const { results: batchResults, failure } = await vetClusterBatch(rest, batches[i], i);
+  const batchOutcomes = await Promise.all(
+    batches.map((batch, i) => vetClusterBatch(rest, batch, i)),
+  );
+  for (const { results: batchResults, failure } of batchOutcomes) {
     results.push(...batchResults);
     if (failure) failures.push(failure);
   }

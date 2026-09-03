@@ -713,9 +713,14 @@ async function enrichResultsWithPageSummaries(
     })
     .slice(0, maxFetches);
 
+  // 対象件数は既にmaxFetchesで絞り込み済みで、各ページ取得は互いに独立しているため並列実行する
+  // （レビュー指摘: 逐次awaitだと1件あたり最大6秒のタイムアウトが件数分積み上がっていた）。
   const enriched = [...results];
-  for (const index of candidateIndexes) {
-    const summary = await fetchWebPageSummary(enriched[index].url);
+  const summaries = await Promise.all(
+    candidateIndexes.map((index) => fetchWebPageSummary(enriched[index].url)),
+  );
+  candidateIndexes.forEach((index, i) => {
+    const summary = summaries[i];
     enriched[index] = {
       ...enriched[index],
       fetchedPageTitle: summary.title,
@@ -723,7 +728,7 @@ async function enrichResultsWithPageSummaries(
       fetchedImageUrl: summary.imageUrl,
       fetchStatus: summary.fetchStatus,
     };
-  }
+  });
 
   return enriched;
 }
@@ -1015,19 +1020,30 @@ async function runInitialAutoCollection(
     if (rssSources.length > 0) {
       try {
         const preferredLanguage = await getPreferredFeedLanguageForUser();
-        for (const source of rssSources) {
-          if (!source.rss_url) continue;
-          const fetchResult = await fetchAndSaveRssForSource(
-            supabase,
-            userId,
-            {
-              id: source.id,
-              topic_id: source.topic_id,
-              name: source.name,
-              rss_url: source.rss_url,
-            },
-            preferredLanguage,
-          );
+        // 各sourceのRSS取得は互いに独立したフィード・DB upsertのため並列実行する
+        // （レビュー指摘: 逐次awaitだとsource数分のフィード取得時間がそのまま積み上がっていた）。
+        // 集計（result.*への加算・warnings追加）は各fetchが完了した後にまとめて順番通り行うため、
+        // 結果の集計順序自体は変わらない。
+        const fetchTargets = rssSources.filter(
+          (source): source is typeof source & { rss_url: string } => Boolean(source.rss_url),
+        );
+        const fetchResults = await Promise.all(
+          fetchTargets.map((source) =>
+            fetchAndSaveRssForSource(
+              supabase,
+              userId,
+              {
+                id: source.id,
+                topic_id: source.topic_id,
+                name: source.name,
+                rss_url: source.rss_url,
+              },
+              preferredLanguage,
+            ),
+          ),
+        );
+        fetchTargets.forEach((source, i) => {
+          const fetchResult = fetchResults[i];
           result.rssSourcesFetched += 1;
           result.feedItemsFetched += fetchResult.savedItemCount;
           if (fetchResult.status === "failed") {
@@ -1035,7 +1051,7 @@ async function runInitialAutoCollection(
               `RSS取得に失敗しました（${source.name}）: ${fetchResult.errorMessage ?? "不明なエラー"}`,
             );
           }
-        }
+        });
       } catch (e) {
         result.warnings.push(`RSS取得処理に失敗しました: ${getErrorMessage(e)}`);
       }
@@ -1135,24 +1151,39 @@ async function runInitialAutoCollection(
     result.researchQueriesGenerated = plannedQueries.length;
 
     const researchResultsFound: NewResearchResult[] = [];
-    for (const planned of plannedQueries) {
-      try {
-        const found = await provider.search(
-          planned.query,
-          topicId,
-          AI_LIMITS.maxResultsPerBraveQuery,
-        );
-        // providerはチャネルを意識しないため、どのクエリバケット
-        // （officialSiteQueries/eventQueries/searchQueries）から実行されたかに応じて
-        // 呼び出し元でchannelを確定させる。research_plan_idも合わせて確定させる。
-        researchResultsFound.push(
-          ...found.map((r) => ({ ...r, channel: planned.channel, researchPlanId: persistedPlanId })),
-        );
-      } catch (e) {
+    // 各検索クエリは互いに依存しないAPI呼び出しのため並列実行する
+    // （レビュー指摘: 逐次awaitだとクエリ数分の検索APIレイテンシがそのまま積み上がっていた）。
+    const searchOutcomes = await Promise.all(
+      plannedQueries.map(async (planned) => {
+        try {
+          const found = await provider.search(
+            planned.query,
+            topicId,
+            AI_LIMITS.maxResultsPerBraveQuery,
+          );
+          return { planned, found };
+        } catch (e) {
+          return { planned, error: e };
+        }
+      }),
+    );
+    for (const outcome of searchOutcomes) {
+      if ("error" in outcome) {
         result.warnings.push(
-          `検索（${planned.query.query}）に失敗しました: ${getErrorMessage(e)}`,
+          `検索（${outcome.planned.query.query}）に失敗しました: ${getErrorMessage(outcome.error)}`,
         );
+        continue;
       }
+      // providerはチャネルを意識しないため、どのクエリバケット
+      // （officialSiteQueries/eventQueries/searchQueries）から実行されたかに応じて
+      // 呼び出し元でchannelを確定させる。research_plan_idも合わせて確定させる。
+      researchResultsFound.push(
+        ...outcome.found.map((r) => ({
+          ...r,
+          channel: outcome.planned.channel,
+          researchPlanId: persistedPlanId,
+        })),
+      );
     }
 
     // 4b. official_siteチャネル: 検索APIではなく、信頼度の高い公式サイトを
@@ -1166,59 +1197,72 @@ async function runInitialAutoCollection(
         .filter((c) => c.is_official === true && c.url && isWebDiscoveryEligible(c))
         .slice(0, 2);
 
-      for (const source of officialCandidates) {
-        try {
-          const discovery = await discoverLinksForUrl(source.id, source.name, source.url);
-          if (discovery.status !== "success") {
-            result.warnings.push(
-              `公式サイトのクロールに失敗しました（${source.name}）: ${discovery.errorMessage ?? "不明なエラー"}`,
-            );
-            continue;
-          }
-
-          let sourceDomain: string | null = null;
+      // 候補は最大2件だが、互いに独立したクロールなので並列実行する（レビュー指摘）。
+      const discoveryOutcomes = await Promise.all(
+        officialCandidates.map(async (source) => {
           try {
-            sourceDomain = new URL(source.url).hostname;
-          } catch {
-            sourceDomain = null;
+            const discovery = await discoverLinksForUrl(source.id, source.name, source.url);
+            return { source, discovery };
+          } catch (e) {
+            return { source, error: e };
           }
+        }),
+      );
 
-          const officialResults: NewResearchResult[] = discovery.discoveredLinks.map((link) => ({
-            topicId,
-            query: `official_site:${source.name}`,
-            provider: "official_site" as const,
-            resultType: "official_page" as const,
-            title: link.title,
-            url: link.url,
-            snippet: null,
-            sourceName: source.name,
-            sourceDomain,
-            authorName: null,
-            publishedAt: null,
-            rankingPosition: null,
-            popularityScore: null,
-            credibilityScore: 80,
-            relevanceScore: link.score,
-            freshnessScore: null,
-            imageUrl: null,
-            rawMetadata: { matchedKeyword: link.matchedKeyword, discoveryScore: link.score },
-            channel: "official_site" as const,
-            researchPlanId: persistedPlanId,
-            isFollowUp: false,
-            followUpReason: null,
-            fetchedPageTitle: null,
-            fetchedPageDescription: null,
-            fetchedImageUrl: null,
-            fetchStatus: null,
-          }));
-
-          result.officialSiteResultsFound += officialResults.length;
-          researchResultsFound.push(...officialResults);
-        } catch (e) {
+      for (const outcome of discoveryOutcomes) {
+        const { source } = outcome;
+        if ("error" in outcome) {
           result.warnings.push(
-            `公式サイトのクロール処理に失敗しました（${source.name}）: ${getErrorMessage(e)}`,
+            `公式サイトのクロール処理に失敗しました（${source.name}）: ${getErrorMessage(outcome.error)}`,
           );
+          continue;
         }
+        const { discovery } = outcome;
+        if (discovery.status !== "success") {
+          result.warnings.push(
+            `公式サイトのクロールに失敗しました（${source.name}）: ${discovery.errorMessage ?? "不明なエラー"}`,
+          );
+          continue;
+        }
+
+        let sourceDomain: string | null = null;
+        try {
+          sourceDomain = new URL(source.url).hostname;
+        } catch {
+          sourceDomain = null;
+        }
+
+        const officialResults: NewResearchResult[] = discovery.discoveredLinks.map((link) => ({
+          topicId,
+          query: `official_site:${source.name}`,
+          provider: "official_site" as const,
+          resultType: "official_page" as const,
+          title: link.title,
+          url: link.url,
+          snippet: null,
+          sourceName: source.name,
+          sourceDomain,
+          authorName: null,
+          publishedAt: null,
+          rankingPosition: null,
+          popularityScore: null,
+          credibilityScore: 80,
+          relevanceScore: link.score,
+          freshnessScore: null,
+          imageUrl: null,
+          rawMetadata: { matchedKeyword: link.matchedKeyword, discoveryScore: link.score },
+          channel: "official_site" as const,
+          researchPlanId: persistedPlanId,
+          isFollowUp: false,
+          followUpReason: null,
+          fetchedPageTitle: null,
+          fetchedPageDescription: null,
+          fetchedImageUrl: null,
+          fetchStatus: null,
+        }));
+
+        result.officialSiteResultsFound += officialResults.length;
+        researchResultsFound.push(...officialResults);
       }
     }
 
@@ -1360,27 +1404,38 @@ async function runInitialAutoCollection(
 
       if (followUpQueries.length > 0) {
         const followUpFound: NewResearchResult[] = [];
-        for (const planned of followUpQueries) {
-          try {
-            const found = await provider.search(
-              planned.query,
-              topicId,
-              AI_LIMITS.maxResultsPerBraveQuery,
-            );
-            followUpFound.push(
-              ...found.map((r) => ({
-                ...r,
-                channel: planned.channel,
-                researchPlanId: persistedPlanId,
-                isFollowUp: true,
-                followUpReason: planned.followUpReason,
-              })),
-            );
-          } catch (e) {
+        // 主検索クエリのループ（4.）と同様、互いに独立したAPI呼び出しのため並列実行する
+        // （レビュー指摘）。
+        const followUpOutcomes = await Promise.all(
+          followUpQueries.map(async (planned) => {
+            try {
+              const found = await provider.search(
+                planned.query,
+                topicId,
+                AI_LIMITS.maxResultsPerBraveQuery,
+              );
+              return { planned, found };
+            } catch (e) {
+              return { planned, error: e };
+            }
+          }),
+        );
+        for (const outcome of followUpOutcomes) {
+          if ("error" in outcome) {
             result.warnings.push(
-              `追加検索（${planned.query.query}）に失敗しました: ${getErrorMessage(e)}`,
+              `追加検索（${outcome.planned.query.query}）に失敗しました: ${getErrorMessage(outcome.error)}`,
             );
+            continue;
           }
+          followUpFound.push(
+            ...outcome.found.map((r) => ({
+              ...r,
+              channel: outcome.planned.channel,
+              researchPlanId: persistedPlanId,
+              isFollowUp: true,
+              followUpReason: outcome.planned.followUpReason,
+            })),
+          );
         }
 
         if (followUpFound.length > 0) {
