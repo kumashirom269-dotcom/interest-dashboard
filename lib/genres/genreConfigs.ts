@@ -968,6 +968,18 @@ export const GENRE_CONFIGS: GenreDetailedConfig[] = [
     scoringWeights: scoringWeights({ reliability: 0.2, urgency: 0.1, userPreference: 0.03 }),
     configurationVersion: 1,
     lastVerifiedAt: IMPLEMENTATION_DATE,
+    highRiskWarning: {
+      triggerInformationTypes: ["poisoning", "adverse_effect", "food_poisoning", "warning", "alert", "recall"],
+      lines: [
+        "緊急時は自己判断せず、まず動物病院または専門機関（動物病院・中毒に関する専門相談窓口等）へ連絡してください。",
+        "この情報は個別の診断・治療の代わりにはなりません。自己判断で吐かせる等の処置をしないでください。",
+        "動物種・体重・摂取量・症状により対応が異なります。必ず個別に獣医師等の専門家へ確認してください。",
+      ],
+    },
+    professionalSourcePatterns: {
+      facility: /動物病院|動物医療センター|どうぶつ病院|動物クリニック/,
+      corroborating: /獣医師|院長|監修|診療科|診療時間|所在地|アクセス|電話|TEL/,
+    },
   },
   {
     genreId: "local_events_festivals",

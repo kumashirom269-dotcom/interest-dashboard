@@ -81,6 +81,27 @@ export interface GenreDetailedConfig {
   // 媒体名は初期候補であり、ドメインや運営状態を固定的に信用し続けない。
   // このジャンル設定が最後に内容確認された日時（実装時点を初期値とする）。
   lastVerifiedAt: string;
+
+  // high/criticalリスクのカードに付与する、ジャンル固有の詳細警告文
+  // （lib/recommendation-cards/highRiskWarnings.ts参照）。未設定のジャンルは汎用の
+  // 確認喚起文にフォールバックする。安全上の文言は各ジャンルの専門知識に基づいて
+  // 個別に用意する必要があるため、任意フィールドとし既存33ジャンルへの一律追加は行わない
+  // （中身の無い警告文を捏造しない）。
+  highRiskWarning?: {
+    // このinformationTypesのいずれかを含む場合に詳細警告を出す（含まれない場合は汎用警告）。
+    triggerInformationTypes: string[];
+    lines: string[];
+  };
+
+  // 「Verified professional source」（レビュー指摘#1、Tier2相当）の判定に使う、
+  // ジャンル固有のキーワードパターン（lib/research-review/sourceTier.ts参照）。
+  // 施設種別を示す語と運営情報を示す語の両方が本文中に確認できる場合のみtrueにする方針
+  // （ドメイン文字列だけでの認定を避けるため）。未設定のジャンルはこの判定を行わない
+  // （中身の無いパターンを捏造しない）。
+  professionalSourcePatterns?: {
+    facility: RegExp;
+    corroborating: RegExp;
+  };
 }
 
 // 仕様書2章「独立ジャンルではなく横断ルールとして扱う領域」に対応する横断ルール定義。

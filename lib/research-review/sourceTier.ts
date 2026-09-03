@@ -9,10 +9,15 @@
 // Tier1に寄せずTier3（review_required相当）に倒す。
 import type { ResearchChannel } from "@/lib/research/types";
 import type { RiskLevel } from "@/lib/genres/types";
+import { getGenreConfig } from "@/lib/genres/genreConfigs";
 
 export type SourceTier = 1 | 2 | 3;
 
-const TIER2_CHANNELS: ResearchChannel[] = ["news_site", "event_site", "ticket_site", "local_media", "rss"];
+// documentationはlib/recommendation/scoreInformationValue.tsのCHANNEL_RELIABILITYで
+// official_site(95)に次ぐ85点を持つが、ここでは長らく漏れておりTier3扱いになっていた
+// （レビュー指摘）。news_site(80点)がTier2である以上、より信頼度の高いdocumentationも
+// Tier2以上として扱うのが整合的。
+const TIER2_CHANNELS: ResearchChannel[] = ["news_site", "event_site", "ticket_site", "local_media", "rss", "documentation"];
 
 // 辞書・百科事典・個人ブログ・まとめサイト・一般掲示板等、どのトピックに対しても構造的に
 // 「公式情報源」になり得ないドメイン。channelの主張や検索クエリの意図によらず、
@@ -70,7 +75,8 @@ export interface SourceTierContext {
   // sources.is_official=trueで既に確認済みのドメイン一覧（同一トピックで既に検証済みの情報源）。
   knownOfficialDomains?: string[];
   // "Verified professional source"判定に使うジャンルID・テキスト（タイトル・スニペット・
-  // sourceName等の結合）。lib/research-review/professionalSources.ts参照。
+  // sourceName等の結合）。判定パターンはlib/genres/genreConfigs.tsの
+  // GenreDetailedConfig.professionalSourcePatternsを参照。
   genreId?: string;
   professionalSourceText?: string;
 }
@@ -79,16 +85,19 @@ export interface SourceTierContext {
 // ページの内容（施設名・診療科・監修者・所在地らしき情報等の複数シグナル）から緩やかに推定する。
 // 実際のページクロール・構造化データ解析・法人番号照会までは行わないため、あくまで
 // タイトル・スニペットに含まれる複数キーワードの組み合わせによる近似的なヒューリスティックであり、
-// 正式な運営者・獣医師資格の確認ではない点に注意（現状のデータで可能な範囲の対応）。
+// 正式な運営者・資格の確認ではない点に注意（現状のデータで可能な範囲の対応）。
 // ドメイン文字列だけでの認定を避けるため、「施設種別を示す語」と「運営情報を示す語」の
 // 両方が本文中に確認できる場合のみtrueにする。
-const PET_PROFESSIONAL_FACILITY_PATTERN = /動物病院|動物医療センター|どうぶつ病院|動物クリニック/;
-const PET_PROFESSIONAL_CORROBORATING_PATTERN =
-  /獣医師|院長|監修|診療科|診療時間|所在地|アクセス|電話|TEL/;
-
+//
+// 判定パターンは以前genreId === "pets_animals"のハードコード分岐＋専用正規表現だったが、
+// lib/genres/genreConfigs.tsのGenreDetailedConfig.professionalSourcePatternsを見るように
+// 変更した（レビュー指摘）。パターン未設定のジャンルは判定を行わない（falseを返す。
+// 中身の無い判定を捏造しない）。
 export function isVerifiedProfessionalSource(genreId: string | undefined, text: string | undefined): boolean {
-  if (genreId !== "pets_animals" || !text) return false;
-  return PET_PROFESSIONAL_FACILITY_PATTERN.test(text) && PET_PROFESSIONAL_CORROBORATING_PATTERN.test(text);
+  if (!genreId || !text) return false;
+  const patterns = getGenreConfig(genreId)?.professionalSourcePatterns;
+  if (!patterns) return false;
+  return patterns.facility.test(text) && patterns.corroborating.test(text);
 }
 
 // 実際のURLのホスト名から、真正な公式ドメインかどうかを判定する。
