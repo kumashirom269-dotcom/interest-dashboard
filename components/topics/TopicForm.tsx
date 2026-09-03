@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { Button } from "@/components/ui/Button";
 
 export interface TopicFormValues {
@@ -29,8 +29,14 @@ export function TopicForm({
   onCancel,
 }: TopicFormProps) {
   const [values, setValues] = useState<TopicFormValues>(initialValues);
+  // 説明文・キーワードは任意項目であることを伝えるため、既に入力済みの場合（編集時等）を
+  // 除いて既定では折りたたんでおく（レビュー指摘: 「単語だけでもAIが推測する」という
+  // 気軽さが伝わりにくかった）。
+  const [showDetails, setShowDetails] = useState(
+    () => Boolean(initialValues.description || initialValues.keywords),
+  );
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!values.name.trim()) return;
     onSubmit(values);
@@ -50,46 +56,62 @@ export function TopicForm({
           value={values.name}
           onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))}
           placeholder="例：AI"
+          autoFocus
           className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
         />
+        <p className="text-xs text-slate-500">
+          単語の登録だけでもOK。AIが内容を推測して情報収集を始めます。
+        </p>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label
-          className="text-xs font-medium text-slate-600"
-          htmlFor="topic-description"
-        >
-          説明文
-        </label>
-        <textarea
-          id="topic-description"
-          value={values.description}
-          onChange={(e) =>
-            setValues((v) => ({ ...v, description: e.target.value }))
-          }
-          placeholder="例：生成AI、AIツール、AIを使った開発に興味があります"
-          rows={2}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-        />
-      </div>
+      {showDetails ? (
+        <>
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs font-medium text-slate-600"
+              htmlFor="topic-description"
+            >
+              説明文（任意）
+            </label>
+            <textarea
+              id="topic-description"
+              value={values.description}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, description: e.target.value }))
+              }
+              placeholder="例：生成AI、AIツール、AIを使った開発に興味があります"
+              rows={2}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            />
+          </div>
 
-      <div className="flex flex-col gap-1">
-        <label
-          className="text-xs font-medium text-slate-600"
-          htmlFor="topic-keywords"
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs font-medium text-slate-600"
+              htmlFor="topic-keywords"
+            >
+              関連キーワード（任意・カンマ区切り）
+            </label>
+            <input
+              id="topic-keywords"
+              value={values.keywords}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, keywords: e.target.value }))
+              }
+              placeholder="例：生成AI, AIツール, OpenAI"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            />
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowDetails(true)}
+          className="self-start text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
         >
-          関連キーワード（カンマ区切り）
-        </label>
-        <input
-          id="topic-keywords"
-          value={values.keywords}
-          onChange={(e) =>
-            setValues((v) => ({ ...v, keywords: e.target.value }))
-          }
-          placeholder="例：生成AI, AIツール, OpenAI"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-        />
-      </div>
+          対象を判断しづらそうな場合は、説明文・キーワードを詳しく入力する（任意）
+        </button>
+      )}
 
       <div className="flex justify-end gap-2">
         {onCancel && (

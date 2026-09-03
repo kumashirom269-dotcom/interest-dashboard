@@ -489,23 +489,34 @@ export function TopicsPageClient({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div>
         <h1 className="text-lg font-semibold text-slate-900">
           トピック管理
         </h1>
-        {!isBusyWithRegistration && !editingTopic && (
+        <p className="mt-0.5 text-sm text-slate-500">
+          気になるテーマを登録するほど、AIがあなた専用の情報源に育てていきます。
+        </p>
+      </div>
+
+      {/* 主要導線として視認性を上げる（レビュー指摘: 以前は右上の小さいボタンで目立たなかった）。
+          単語登録だけでも動く（AIが推測する）ことをボタン直下で明示し、心理的なハードルを下げる。 */}
+      {!isBusyWithRegistration && !editingTopic && (
+        <div className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
           <Button
-            size="sm"
+            size="lg"
             variant="primary"
             onClick={() => {
               setAddFormInitialValues(undefined);
               setShowAddForm(true);
             }}
           >
-            + トピックを追加
+            ＋ 新しいトピックを追加
           </Button>
-        )}
-      </div>
+          <p className="text-xs text-slate-500">
+            トピック名を入れるだけでOK。詳しい説明が無くてもAIが内容を推測します。
+          </p>
+        </div>
+      )}
 
       {error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">

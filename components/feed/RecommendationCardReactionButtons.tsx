@@ -29,14 +29,17 @@ export function RecommendationCardReactionButtons({
   const activeSet = new Set(activeReactions);
 
   return (
-    <div className="flex flex-wrap gap-1.5">
+    // 4つのボタンが幅の狭いカード内で2行に折り返すのを避けるため、xsサイズ・flex-nowrapで
+    // 必ず1行に収める（レビュー指摘）。
+    <div className="flex flex-nowrap gap-1">
       {TOGGLEABLE_RECOMMENDATION_CARD_REACTION_TYPES.map((reactionType) => (
         <Button
           key={reactionType}
-          size="sm"
+          size="xs"
           variant={activeSet.has(reactionType) ? "primary" : "secondary"}
           disabled={disabled}
           onClick={() => onToggle(reactionType)}
+          className="shrink-0"
         >
           {REACTION_ICONS[reactionType]} {RECOMMENDATION_CARD_REACTION_LABELS[reactionType]}
         </Button>
