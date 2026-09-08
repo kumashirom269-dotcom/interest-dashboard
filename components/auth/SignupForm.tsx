@@ -28,7 +28,19 @@ export function SignupForm() {
 
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          // 確認メール内リンクの遷移先を明示的に指定する。未指定だとSupabase
+          // プロジェクト設定の「Site URL」（開発初期のlocalhost:3000のままになっている
+          // ことが多い）にフォールバックし、本番で登録したユーザーのリンクが
+          // 「サーバーに接続できない」エラーになる不具合が実機検証で見つかった
+          // （レビュー指摘）。window.location.originを使うことで、本番アクセス時は
+          // 本番URL、ローカル開発時はlocalhostが自動的に使われる。
+          emailRedirectTo: `${window.location.origin}/signup-confirmed`,
+        },
+      });
 
       if (error) {
         setErrorMessage(error.message);
