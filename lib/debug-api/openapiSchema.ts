@@ -289,7 +289,7 @@ export function buildDebugApiOpenApiSchema(serverUrl: string) {
       title: "Interest Dashboard Debug API",
       version: "1.2.0",
       description:
-        "関心情報ダッシュボードの内部状態を確認するための読み取り専用API。" +
+        "Antennaの内部状態を確認するための読み取り専用API。" +
         "APIキー・secret・service_role等の機密情報は一切返さない。" +
         "x-debug-api-keyによるAPIキー認証は、開発者本人が自分のデータを確認するための" +
         "簡易な仕組みであり、不特定多数のユーザー向けではない。将来サービスを一般公開する際は、" +

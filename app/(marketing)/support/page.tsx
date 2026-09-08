@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "サポート | 関心情報ダッシュボード",
+  title: "サポート | Antenna",
 };
 
 export default function SupportPage() {
@@ -19,7 +19,7 @@ export default function SupportPage() {
             お問い合わせ
           </h2>
           <p>
-            「関心情報ダッシュボード」のご利用方法、不具合のご報告、ご意見・ご要望など
+            「Antenna」のご利用方法、不具合のご報告、ご意見・ご要望など
             は、以下のメールアドレスまでお願いいたします。
           </p>
           <p>Eメール: kumashiro.m.269@gmail.com</p>

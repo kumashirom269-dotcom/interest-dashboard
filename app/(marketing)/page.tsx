@@ -5,7 +5,7 @@ export default function TopPage() {
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
       <div className="flex max-w-xl flex-col items-center gap-6">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          関心情報ダッシュボード
+          Antenna
         </h1>
         <p className="text-base leading-relaxed text-slate-600">
           あなたの趣味・仕事・学習テーマを登録するだけで、AIが情報収集元を判断し、

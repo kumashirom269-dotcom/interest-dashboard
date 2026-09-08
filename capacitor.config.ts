@@ -12,7 +12,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // ビルドしても白い画面のままになる。
 const config: CapacitorConfig = {
   appId: "com.interestdashboard.app",
-  appName: "関心ダッシュボード",
+  appName: "Antenna",
   webDir: "www",
   server: {
     // Vercel本番URL（2026年8月デプロイ）。Webアプリを再デプロイしても、このURL自体は

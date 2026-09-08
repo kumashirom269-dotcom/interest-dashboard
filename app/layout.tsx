@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "関心情報ダッシュボード",
-  description: "自分専用の関心情報ダッシュボード",
+  title: "Antenna",
+  description: "自分専用のAntenna",
 };
 
 // viewportFit: "cover"は、iPhoneアプリ化（Capacitor）でノッチ・ホームインジケーター

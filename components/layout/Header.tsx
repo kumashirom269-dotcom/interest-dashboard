@@ -34,7 +34,7 @@ export function Header({ userEmail = null }: HeaderProps) {
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 pt-3 sm:px-6">
         <Link href="/" className="text-base font-semibold text-slate-900">
-          関心情報ダッシュボード
+          Antenna
         </Link>
         <div className="flex items-center gap-3 text-sm">
           {userEmail ? (

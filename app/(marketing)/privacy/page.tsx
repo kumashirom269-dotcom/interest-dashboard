@@ -4,7 +4,7 @@ import Link from "next/link";
 // （実際に収集している情報・送信先の事業者名等）を必ず見直してください。
 // 法的な有効性・妥当性については、専門家（弁護士等）のレビューを推奨します。
 export const metadata = {
-  title: "プライバシーポリシー | 関心情報ダッシュボード",
+  title: "プライバシーポリシー | Antenna",
 };
 
 export default function PrivacyPage() {
@@ -19,8 +19,8 @@ export default function PrivacyPage() {
 
       <div className="flex flex-col gap-6 text-sm leading-relaxed text-slate-700">
         <p>
-          関心情報ダッシュボード運営事務局（以下「当方」といいます）は、「関心情報ダッシ
-          ュボード」（以下「本サービス」といいます）における、ユーザーの情報の取り扱いに
+          Antenna運営事務局（以下「当方」といいます）は、「Antenna」
+          （以下「本サービス」といいます）における、ユーザーの情報の取り扱いに
           ついて、以下のとおりプライバシーポリシー（以下「本ポリシー」といいます）を定め
           ます。
         </p>

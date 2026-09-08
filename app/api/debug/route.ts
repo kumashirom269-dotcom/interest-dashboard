@@ -7,7 +7,7 @@ export const GET = withDebugAuth(async (request) => {
   return Response.json({
     ok: true,
     description:
-      "関心情報ダッシュボードの状態を確認するための読み取り専用debug API。開発環境、APIキー認証、または認証済みユーザーのみアクセス可能。",
+      "Antennaの状態を確認するための読み取り専用debug API。開発環境、APIキー認証、または認証済みユーザーのみアクセス可能。",
     endpoints: [
       { method: "GET", path: "/api/debug/topics", description: "登録済みトピック一覧" },
       { method: "GET", path: "/api/debug/sources", description: "収集元（sources）一覧" },

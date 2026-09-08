@@ -4,7 +4,7 @@ import Link from "next/link";
 // （運営体制・提供機能・第三者提供先等）を必ず見直してください。
 // 法的な有効性・妥当性については、専門家（弁護士等）のレビューを推奨します。
 export const metadata = {
-  title: "利用規約 | 関心情報ダッシュボード",
+  title: "利用規約 | Antenna",
 };
 
 export default function TermsPage() {
@@ -19,8 +19,8 @@ export default function TermsPage() {
 
       <div className="flex flex-col gap-6 text-sm leading-relaxed text-slate-700">
         <p>
-          この利用規約（以下「本規約」といいます）は、関心情報ダッシュボード運営事務局
-          （以下「当方」といいます）が提供する「関心情報ダッシュボード」（以下「本サービス」
+          この利用規約（以下「本規約」といいます）は、Antenna運営事務局
+          （以下「当方」といいます）が提供する「Antenna」（以下「本サービス」
           といいます）の利用条件を定めるものです。本サービスをご利用になる方（以下
           「ユーザー」といいます）には、本規約に従って本サービスをご利用いただきます。
         </p>
