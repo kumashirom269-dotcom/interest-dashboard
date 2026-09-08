@@ -1,9 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { optimizeFeedItemsWithAiAction, updatePreferredLanguage } from "./actions";
+import {
+  deleteOwnAccountAction,
+  optimizeFeedItemsWithAiAction,
+  updatePreferredLanguage,
+} from "./actions";
+import { createClient } from "@/lib/supabase/client";
 import type { PreferredLanguage } from "@/lib/language/detectLanguage";
 import { DEV_TOOLS_ENABLED } from "@/lib/config/devTools";
 
@@ -16,9 +22,12 @@ const LANGUAGE_LABELS: Record<PreferredLanguage, string> = {
   en: "英語",
 };
 
+const DELETE_CONFIRMATION_TEXT = "削除";
+
 export function SettingsClient({
   preferredLanguage: initialPreferredLanguage,
 }: SettingsClientProps) {
+  const router = useRouter();
   const [preferredLanguage, setPreferredLanguage] = useState(
     initialPreferredLanguage,
   );
@@ -29,6 +38,10 @@ export function SettingsClient({
   const [optimizeResultMessage, setOptimizeResultMessage] = useState<
     string | null
   >(null);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleLanguageChange(language: PreferredLanguage) {
     if (language === preferredLanguage) return;
@@ -59,6 +72,27 @@ export function SettingsClient({
       setError(e instanceof Error ? e.message : "AI最適化処理に失敗しました");
     } finally {
       setIsOptimizing(false);
+    }
+  }
+
+  // 取り消せない操作のため、確認テキストの入力を必須にしたうえで、削除後は
+  // ローカルのセッションもクリアしてトップページへ戻す（アカウント自体が
+  // 消えているため、/settingsに留まれない）。
+  async function handleDeleteAccount() {
+    if (deleteConfirmText !== DELETE_CONFIRMATION_TEXT) return;
+    setError(null);
+    setIsDeleting(true);
+    try {
+      await deleteOwnAccountAction();
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      setIsDeleting(false);
+      setError(
+        e instanceof Error ? e.message : "アカウントの削除に失敗しました",
+      );
     }
   }
 
@@ -125,6 +159,61 @@ export function SettingsClient({
           </div>
         </Card>
       )}
+
+      <Card className="flex flex-col gap-3 border-red-200">
+        <div>
+          <h2 className="text-sm font-semibold text-red-700">
+            アカウントを削除
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            登録したトピック・収集元・保存記事・リアクション履歴を含む、すべてのデータが完全に削除されます。この操作は取り消せません。
+          </p>
+        </div>
+
+        {!showDeleteConfirm ? (
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="self-start"
+          >
+            アカウントを削除する
+          </Button>
+        ) : (
+          <div className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+            <p className="text-xs text-red-800">
+              本当に削除する場合は、下の欄に「{DELETE_CONFIRMATION_TEXT}」と入力してください。
+            </p>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={DELETE_CONFIRMATION_TEXT}
+              className="rounded-md border border-red-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={isDeleting}
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText("");
+                }}
+              >
+                キャンセル
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={isDeleting || deleteConfirmText !== DELETE_CONFIRMATION_TEXT}
+                onClick={handleDeleteAccount}
+              >
+                {isDeleting ? "削除中..." : "完全に削除する"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

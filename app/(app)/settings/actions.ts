@@ -118,3 +118,20 @@ export async function optimizeFeedItemsWithAiAction(): Promise<OptimizeFeedItems
   revalidatePath("/saved");
   return result;
 }
+
+// App Store審査（Guideline 5.1.1(v)）対応: アカウント作成に対応するアプリはアプリ内から
+// 自分でアカウントを削除できる必要がある。supabase/migrations/0049_delete_own_account.sql の
+// SECURITY DEFINER関数を呼ぶだけの薄いラッパー。関数側がauth.uid()（呼び出し本人）のみを
+// 対象にするため、他ユーザーのアカウントを誤って削除する余地はない。
+// 削除後のサインアウト・リダイレクトは呼び出し元（クライアント）の責務とする
+// （このServer Action自体はデータ削除のみ行う）。
+export async function deleteOwnAccountAction(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { error } = await supabase.rpc("delete_own_account");
+  if (error) throw error;
+}
