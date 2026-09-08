@@ -54,6 +54,19 @@ export function SignupForm() {
         return;
       }
 
+      // 確認済みの既存アカウントと同じメールアドレスでsignUp()すると、Supabaseは
+      // セキュリティ上の理由（メールアドレスの存在有無を外部に漏らさないため）で
+      // エラーを返さず、あたかも新規登録が成功したかのような応答を返す。ただし
+      // その場合はdata.user.identitiesが空配列になるため、これを見て判別する
+      // （レビュー指摘: 既存ユーザーに「確認メールを送信しました」とだけ表示され、
+      // 実際にはメールが届かず終わっていた）。
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setErrorMessage(
+          "このメールアドレスはすでに登録されています。ログイン画面からログインしてください。",
+        );
+        return;
+      }
+
       // メール確認が必要な設定の場合、session はまだ発行されない
       setConfirmationSent(true);
     } catch {

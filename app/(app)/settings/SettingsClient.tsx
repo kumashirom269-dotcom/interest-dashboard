@@ -22,8 +22,6 @@ const LANGUAGE_LABELS: Record<PreferredLanguage, string> = {
   en: "英語",
 };
 
-const DELETE_CONFIRMATION_TEXT = "削除";
-
 export function SettingsClient({
   preferredLanguage: initialPreferredLanguage,
 }: SettingsClientProps) {
@@ -40,7 +38,6 @@ export function SettingsClient({
   >(null);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleLanguageChange(language: PreferredLanguage) {
@@ -75,11 +72,20 @@ export function SettingsClient({
     }
   }
 
-  // 取り消せない操作のため、確認テキストの入力を必須にしたうえで、削除後は
-  // ローカルのセッションもクリアしてトップページへ戻す（アカウント自体が
-  // 消えているため、/settingsに留まれない）。
+  // 取り消せない操作だが、文字入力（キーボード操作）は求めず、タップだけで完結させる
+  // （レビュー指摘: 「削除」と入力させる方式は一般的でなく、退会したい人ほど負担に
+  // なる）。「削除する」ボタン→警告カード内の「本当に削除する」ボタン→ネイティブの
+  // confirm()ダイアログ、の2〜3タップで完了する構成にした。confirm()は最後の
+  // 誤操作防止の砦として残す（タップ1回で済み、キーボードは不要）。
   async function handleDeleteAccount() {
-    if (deleteConfirmText !== DELETE_CONFIRMATION_TEXT) return;
+    if (
+      !window.confirm(
+        "アカウントを完全に削除します。登録したトピック・収集元・保存記事・リアクション履歴を含む、すべてのデータが元に戻せなくなります。本当に削除しますか？",
+      )
+    ) {
+      return;
+    }
+
     setError(null);
     setIsDeleting(true);
     try {
@@ -182,33 +188,24 @@ export function SettingsClient({
         ) : (
           <div className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
             <p className="text-xs text-red-800">
-              本当に削除する場合は、下の欄に「{DELETE_CONFIRMATION_TEXT}」と入力してください。
+              一度削除すると元に戻せません。よろしいですか？
             </p>
-            <input
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder={DELETE_CONFIRMATION_TEXT}
-              className="rounded-md border border-red-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-            />
             <div className="flex gap-2">
               <Button
                 size="sm"
                 variant="ghost"
                 disabled={isDeleting}
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setDeleteConfirmText("");
-                }}
+                onClick={() => setShowDeleteConfirm(false)}
               >
                 キャンセル
               </Button>
               <Button
                 size="sm"
                 variant="danger"
-                disabled={isDeleting || deleteConfirmText !== DELETE_CONFIRMATION_TEXT}
+                disabled={isDeleting}
                 onClick={handleDeleteAccount}
               >
-                {isDeleting ? "削除中..." : "完全に削除する"}
+                {isDeleting ? "削除中..." : "本当に削除する"}
               </Button>
             </div>
           </div>
