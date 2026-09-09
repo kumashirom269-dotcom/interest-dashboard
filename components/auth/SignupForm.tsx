@@ -10,8 +10,17 @@ import { createClient } from "@/lib/supabase/client";
 // （Gmail等が安全性確認のためリンクを事前に一度読み込んでしまう）により、
 // 1回限りの確認トークンが本人のタップ前に消費されてしまい、実機検証で
 // 繰り返し「リンクが無効です」になる不具合が確認された。
-// リンクを一切使わない、6桁確認コード（OTP）を画面に直接入力する方式に変更し、
+// リンクを一切使わない、確認コード（OTP）を画面に直接入力する方式に変更し、
 // この種のトークン消費問題を構造的に回避する。
+//
+// SupabaseのメールOTPは「最低6桁を保証する」実装であり「常に6桁」ではない
+// （生成されるランダム値によっては7桁・8桁になることがある。実機検証で
+// 8桁のコードが届く事象を確認済み）。桁数を6固定でハードコードすると、
+// それより長いコードが物理的に入力・送信できず詰んでしまうため、
+// 下限のみを設けて上限には余裕を持たせる。
+const OTP_MIN_LENGTH = 6;
+const OTP_MAX_LENGTH = 10;
+
 export function SignupForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -128,18 +137,18 @@ export function SignupForm() {
       <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
         <p className="text-sm text-slate-600">
           <span className="font-medium text-slate-900">{email}</span>{" "}
-          宛てに6桁の確認コードを送信しました。メールに記載のコードを入力してください。
+          宛てに確認コードを送信しました。メールに記載のコードを入力してください。
         </p>
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-600" htmlFor="otp-code">
-            確認コード（6桁）
+            確認コード
           </label>
           <input
             id="otp-code"
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={OTP_MAX_LENGTH}
             value={otpCode}
             onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
             placeholder="123456"
@@ -161,7 +170,7 @@ export function SignupForm() {
         <Button
           type="submit"
           variant="primary"
-          disabled={verifyingOtp || otpCode.length !== 6}
+          disabled={verifyingOtp || otpCode.length < OTP_MIN_LENGTH}
         >
           {verifyingOtp ? "確認中..." : "確認する"}
         </Button>
