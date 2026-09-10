@@ -107,6 +107,7 @@ export async function updateSourceSettings(
             fetch_status: "unverified",
             last_fetch_error_type: null,
             last_fetch_error_message: null,
+            consecutive_fetch_failure_count: 0,
           }
         : {}),
     })
@@ -227,6 +228,13 @@ function categorizeFetchError(error: unknown): {
 
 // fetch_status/last_fetch_*系カラムに、今回の試行結果を永続化する。
 // last_checked_atは既存の挙動（成功時のみ更新）を変えずそのまま維持する。
+//
+// consecutive_fetch_failure_countは、1回の不調と慢性的な取得失敗をUI側で
+// 区別するためのカウンタ（レビュー指摘: 何度失敗しても同じ警告文言しか
+// 出せず、ユーザーがどう対処すべきか判断しづらかった）。成功時は0に
+// リセットし、失敗時は現在値を読んでから+1する（supabase-jsの.update()は
+// "column = column + 1"のような式更新に対応していないため、読んでから
+// 書く方式を取る。取得失敗時のみの処理なのでホットパスではない）。
 async function persistFetchDiagnostics(
   supabase: Awaited<ReturnType<typeof createClient>>,
   sourceId: string,
@@ -246,10 +254,19 @@ async function persistFetchDiagnostics(
         last_successful_fetch_at: now,
         last_fetch_error_type: null,
         last_fetch_error_message: null,
+        consecutive_fetch_failure_count: 0,
       })
       .eq("id", sourceId);
     return;
   }
+
+  const { data: currentSource } = await supabase
+    .from("sources")
+    .select("consecutive_fetch_failure_count")
+    .eq("id", sourceId)
+    .single();
+  const nextFailureCount =
+    (currentSource?.consecutive_fetch_failure_count ?? 0) + 1;
 
   await supabase
     .from("sources")
@@ -258,6 +275,7 @@ async function persistFetchDiagnostics(
       last_fetch_attempt_at: now,
       last_fetch_error_type: outcome.errorType,
       last_fetch_error_message: outcome.errorMessage,
+      consecutive_fetch_failure_count: nextFailureCount,
     })
     .eq("id", sourceId);
 }

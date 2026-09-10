@@ -75,6 +75,7 @@ export interface Source {
   last_fetch_error_message?: string | null;
   last_fetch_attempt_at?: string | null;
   last_successful_fetch_at?: string | null;
+  consecutive_fetch_failure_count?: number;
   is_official?: boolean;
   is_specific_source?: boolean;
   is_search_seed?: boolean;

@@ -16,6 +16,12 @@ import {
   type SourceType,
 } from "@/types/domain";
 
+// 何度失敗しても同じ「取得エラー」文言しか出さないと、ユーザーがどう対処すべきか
+// 判断しづらい（レビュー指摘）。1〜2回は一時的な不調の可能性が高いため今まで通りの
+// 表示に留め、3回以上連続で失敗した場合のみ「見直しを促す」表示に切り替える。
+// 自動での一時停止・削除は行わない（ユーザーの操作なしにデータが変化しないようにする）。
+const CHRONIC_FETCH_FAILURE_THRESHOLD = 3;
+
 const STATUS_OPTIONS: SourceStatus[] = [
   "candidate",
   "active",
@@ -206,12 +212,49 @@ export function SourceCard({
         {!source.url && <Badge tone="danger">URL未設定</Badge>}
       </div>
 
-      {source.fetch_status === "broken" && source.last_fetch_error_message && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
-          <span className="font-medium">取得エラー：</span>
-          {source.last_fetch_error_message}
-        </p>
-      )}
+      {source.fetch_status === "broken" &&
+        source.last_fetch_error_message &&
+        (() => {
+          const failureCount = source.consecutive_fetch_failure_count ?? 0;
+          const isChronic = failureCount >= CHRONIC_FETCH_FAILURE_THRESHOLD;
+
+          if (!isChronic) {
+            return (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                <span className="font-medium">取得エラー：</span>
+                {source.last_fetch_error_message}
+              </p>
+            );
+          }
+
+          return (
+            <div className="flex flex-col gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              <p>
+                <span className="font-medium">
+                  {failureCount}回連続で取得に失敗しています：
+                </span>
+                {source.last_fetch_error_message}
+              </p>
+              <p>URLを見直すか、この収集元を一時停止することをおすすめします。</p>
+              <div className="flex flex-wrap gap-2">
+                {onUpdateSourceSettings && !isEditing && (
+                  <Button size="sm" variant="secondary" onClick={openEditForm}>
+                    取得設定を見直す
+                  </Button>
+                )}
+                {onStatusChange && source.status !== "paused" && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onStatusChange(source.id, "paused")}
+                  >
+                    一時停止する
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
       {source.needs_review && source.review_reason && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">

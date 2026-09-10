@@ -25,6 +25,7 @@ export interface SourceRow {
   last_fetch_error_message: string | null;
   last_fetch_attempt_at: string | null;
   last_successful_fetch_at: string | null;
+  consecutive_fetch_failure_count: number | null;
   is_official: boolean | null;
   is_specific_source: boolean | null;
   is_search_seed: boolean | null;
@@ -58,6 +59,7 @@ export function mapSourceRow(row: SourceRow): SourceWithTopic {
     last_fetch_error_message: row.last_fetch_error_message,
     last_fetch_attempt_at: row.last_fetch_attempt_at,
     last_successful_fetch_at: row.last_successful_fetch_at,
+    consecutive_fetch_failure_count: row.consecutive_fetch_failure_count ?? 0,
     is_official: row.is_official ?? false,
     is_specific_source: row.is_specific_source ?? true,
     is_search_seed: row.is_search_seed ?? false,
