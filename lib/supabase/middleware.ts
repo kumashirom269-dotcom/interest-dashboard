@@ -38,7 +38,18 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
+
+  // getUser()はCookie内のトークンをSupabaseサーバーへ問い合わせて検証する
+  // （楽観的チェックより一段階厳格）。有効なCookieが送られてきているにも
+  // かかわらずログイン画面へ押し戻される不具合の原因調査のため、失敗理由を
+  // 一時的にログ出力する（実機検証用。原因特定後に削除する）。
+  if (error) {
+    console.error(
+      `[proxy] getUser failed: name=${error.name} status=${error.status} message=${error.message} path=${request.nextUrl.pathname}`,
+    );
+  }
 
   if (!user && isProtectedPath(request.nextUrl.pathname)) {
     const loginUrl = new URL("/login", request.url);
