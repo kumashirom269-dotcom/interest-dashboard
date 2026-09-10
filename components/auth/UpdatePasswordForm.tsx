@@ -10,8 +10,14 @@ type SessionCheckState = "checking" | "valid" | "invalid";
 // パスワード再設定メールのリンクから遷移してくる画面。
 // Supabaseのブラウザクライアントは detectSessionInUrl（既定でtrue）により、
 // このページのURL（recovery用のtoken/codeを含む）から自動的にセッションを確立する。
-// そのため、ここでは「セッションが確立できたか」をmount時に確認するだけでよく、
-// URLのtoken/codeを自前でパースする必要は無い。
+//
+// 単発のgetSession()呼び出しだけだと、URLからのセッション確立処理が完了する前に
+// 判定してしまい、実際には有効なリンクなのに「無効」と誤判定する可能性がある
+// （SignupConfirmedNotice.tsxで確認済みの実機不具合と同種。こちらは対策が漏れて
+// いたため合わせて修正）。onAuthStateChangeでSIGNED_INイベントも合わせて監視し、
+// 一定時間（4秒）は待ってから最終的に判定する。
+const INVALID_LINK_TIMEOUT_MS = 4000;
+
 export function UpdatePasswordForm() {
   const router = useRouter();
   const [sessionState, setSessionState] = useState<SessionCheckState>("checking");
@@ -22,9 +28,37 @@ export function UpdatePasswordForm() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSessionState(session ? "valid" : "invalid");
+    let settled = false;
+
+    function markValid() {
+      if (settled) return;
+      settled = true;
+      setSessionState("valid");
+    }
+
+    // detectSessionInUrlによる非同期のセッション確立が完了するとSIGNED_INが発火する。
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") markValid();
     });
+
+    // 既にセッションが確立済み（判定タイミングによってはこちらが先に完了する）の
+    // 場合にも対応する。
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) markValid();
+    });
+
+    // 上記のいずれでも一定時間内に確立できなければ、リンク自体が無効/期限切れと判断する。
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        setSessionState("invalid");
+      }
+    }, INVALID_LINK_TIMEOUT_MS);
+
+    return () => {
+      authListener.subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
