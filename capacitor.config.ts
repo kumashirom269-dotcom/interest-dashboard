@@ -15,10 +15,13 @@ const config: CapacitorConfig = {
   appName: "Antenna",
   webDir: "www",
   server: {
-    // Vercel本番URL（2026年8月デプロイ）。Webアプリを再デプロイしても、このURL自体は
-    // 変わらない（vercel --prodのたびに同じProductionエイリアスへ向き直る）ため、
-    // 通常はこの値を書き換える必要はない。
-    url: "https://interest-dashboard-nine.vercel.app",
+    // 本番カスタムドメイン（2026年9月取得・接続）。以前はVercelの割り当てドメイン
+    // （interest-dashboard-nine.vercel.app）を指していたが、Web版と同じ
+    // myantenna.appに統一した（どちらも同じVercelデプロイを指しており機能的な
+    // 違いは無いが、ブランディング上の統一のため）。apex（myantenna.app）は
+    // www.myantenna.appへの308リダイレクトを挟むため、リダイレクト一往復分を
+    // 省くためwww付きを直接指定している。
+    url: "https://www.myantenna.app",
     // 本番URLは常にhttps前提のため、平文http通信は許可しない。
     cleartext: false,
   },
