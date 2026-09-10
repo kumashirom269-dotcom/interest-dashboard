@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
+import { waitForSessionReady } from "@/lib/supabase/waitForSessionReady";
 
 // メール内リンク方式（クリック確認）は、メールアプリの自動スキャン機能
 // （Gmail等が安全性確認のためリンクを事前に一度読み込んでしまう）により、
@@ -100,6 +101,7 @@ export function SignupForm() {
         return;
       }
 
+      await waitForSessionReady(supabase);
       router.push("/mypage");
       router.refresh();
     } catch {

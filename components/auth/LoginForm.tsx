@@ -4,6 +4,7 @@ import { useState, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
+import { waitForSessionReady } from "@/lib/supabase/waitForSessionReady";
 
 export function LoginForm() {
   const router = useRouter();
@@ -29,6 +30,11 @@ export function LoginForm() {
         return;
       }
 
+      // signInWithPassword()のPromiseが解決した直後でも、実機ではセッションの
+      // Cookie反映がまだ完了していないことがあり、直後に遷移するとmiddleware側が
+      // 未ログイン扱いにしてログイン画面へ押し戻してしまう
+      // （lib/supabase/waitForSessionReady.ts参照。SignupForm.tsxと同種の対策）。
+      await waitForSessionReady(supabase);
       router.push("/mypage");
       router.refresh();
     } catch {
