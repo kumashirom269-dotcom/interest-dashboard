@@ -4,6 +4,7 @@ import { useState, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import { createClient } from "@/lib/supabase/client";
 import { waitForSessionReady } from "@/lib/supabase/waitForSessionReady";
 
@@ -22,17 +23,34 @@ import { waitForSessionReady } from "@/lib/supabase/waitForSessionReady";
 const OTP_MIN_LENGTH = 6;
 const OTP_MAX_LENGTH = 10;
 
+// 新規登録・OTP確認とも「サーバーとの通信」→「セッション反映待ち」→
+// 「画面遷移」の複数段階からなる（レビュー指摘: ボタンを押した後、何が
+// 起きているのかユーザーに伝わらず、押せているのかどうか不安になる）。
+// 段階ごとに文言を変えることで、今どこで待たされているのかが分かるようにする。
+type SubmitPhase = "idle" | "submitting" | "navigating";
+type VerifyPhase = "idle" | "verifying" | "navigating";
+
+const SUBMIT_PHASE_LABELS: Record<Exclude<SubmitPhase, "idle">, string> = {
+  submitting: "登録中...",
+  navigating: "マイページへ移動しています...",
+};
+
+const VERIFY_PHASE_LABELS: Record<Exclude<VerifyPhase, "idle">, string> = {
+  verifying: "確認中...",
+  navigating: "マイページへ移動しています...",
+};
+
 export function SignupForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<SubmitPhase>("idle");
 
   const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [otpCode, setOtpCode] = useState("");
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [verifyPhase, setVerifyPhase] = useState<VerifyPhase>("idle");
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
 
@@ -45,7 +63,7 @@ export function SignupForm() {
       return;
     }
 
-    setSubmitting(true);
+    setSubmitPhase("submitting");
 
     try {
       const supabase = createClient();
@@ -53,11 +71,13 @@ export function SignupForm() {
 
       if (error) {
         setErrorMessage(error.message);
+        setSubmitPhase("idle");
         return;
       }
 
       if (data.session) {
         // メール確認が不要な設定の場合、signUp直後にセッションが張られる
+        setSubmitPhase("navigating");
         router.push("/mypage");
         router.refresh();
         return;
@@ -71,23 +91,24 @@ export function SignupForm() {
         setErrorMessage(
           "このメールアドレスはすでに登録されています。ログイン画面からログインしてください。",
         );
+        setSubmitPhase("idle");
         return;
       }
 
       setAwaitingOtp(true);
+      setSubmitPhase("idle");
     } catch {
       setErrorMessage(
         "通信エラーが発生しました。電波状況をご確認のうえ、もう一度お試しください。",
       );
-    } finally {
-      setSubmitting(false);
+      setSubmitPhase("idle");
     }
   }
 
   async function handleVerifyOtp(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
-    setVerifyingOtp(true);
+    setVerifyPhase("verifying");
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.verifyOtp({
@@ -98,18 +119,22 @@ export function SignupForm() {
 
       if (error) {
         setErrorMessage(error.message);
+        setVerifyPhase("idle");
         return;
       }
 
+      setVerifyPhase("navigating");
       await waitForSessionReady(supabase);
       router.push("/mypage");
       router.refresh();
+      // ここでverifyPhaseを"idle"へ戻さない: 成功時はこのコンポーネント自体が
+      // 画面遷移によってアンマウントされる想定のため、あえて「移動しています...」
+      // 表示を維持したままにする(LoginForm.tsxと同種の対策)。
     } catch {
       setErrorMessage(
         "通信エラーが発生しました。電波状況をご確認のうえ、もう一度お試しください。",
       );
-    } finally {
-      setVerifyingOtp(false);
+      setVerifyPhase("idle");
     }
   }
 
@@ -172,9 +197,10 @@ export function SignupForm() {
         <Button
           type="submit"
           variant="primary"
-          disabled={verifyingOtp || otpCode.length < OTP_MIN_LENGTH}
+          disabled={verifyPhase !== "idle" || otpCode.length < OTP_MIN_LENGTH}
         >
-          {verifyingOtp ? "確認中..." : "確認する"}
+          {verifyPhase !== "idle" && <Spinner className="h-3.5 w-3.5" />}
+          {verifyPhase === "idle" ? "確認する" : VERIFY_PHASE_LABELS[verifyPhase]}
         </Button>
 
         <div className="flex items-center justify-between text-xs">
@@ -193,6 +219,7 @@ export function SignupForm() {
               setOtpCode("");
               setErrorMessage(null);
               setResendMessage(null);
+              setVerifyPhase("idle");
             }}
             className="font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
           >
@@ -270,8 +297,13 @@ export function SignupForm() {
         </p>
       )}
 
-      <Button type="submit" variant="primary" disabled={submitting || !agreedToTerms}>
-        {submitting ? "登録中..." : "新規登録"}
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={submitPhase !== "idle" || !agreedToTerms}
+      >
+        {submitPhase !== "idle" && <Spinner className="h-3.5 w-3.5" />}
+        {submitPhase === "idle" ? "新規登録" : SUBMIT_PHASE_LABELS[submitPhase]}
       </Button>
     </form>
   );
