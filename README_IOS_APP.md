@@ -6,57 +6,62 @@
 （Capacitorの`server.url`方式）を採用しています。これによりWeb側のコードは一切変更せずに
 そのままiPhoneアプリとして動作します。
 
-## すでに完了していること
+## セットアップ済みの内容
 
 - [x] Capacitorパッケージ導入（`@capacitor/core` `@capacitor/ios` `@capacitor/app` `@capacitor/cli` `@capacitor/assets`）
-- [x] `capacitor.config.ts` 作成（アプリID: `com.interestdashboard.app`、アプリ名: 「関心ダッシュボード」）
-- [x] `ios/` ディレクトリにXcodeプロジェクトを生成済み（`npx cap add ios`）
+- [x] `capacitor.config.ts` 作成（アプリID: `com.interestdashboard.app`、アプリ名: 「Antenna」）
+- [x] `ios/` ディレクトリにXcodeプロジェクト生成済み（`npx cap add ios`）
 - [x] アプリアイコン・スプラッシュ画像を生成し、Xcodeプロジェクトへ反映済み
 - [x] ノッチ・ホームインジケーター対応（safe-area）をCSSに追加
-- [x] `npm run ios:sync` / `npm run ios:open` / `npm run ios:assets` スクリプトを追加
-- [x] Vercelへログイン・プロジェクト作成（`nearbyme/interest-dashboard`）
-- [x] 本番環境変数（Supabase・Anthropic・Brave Search・Debug APIキー、`AI_COST_SAVING_MODE=false`）を設定
-- [x] 本番デプロイ完了。本番URL: **https://interest-dashboard-nine.vercel.app**
-- [x] `capacitor.config.ts`の`server.url`を上記の本番URLに更新し、`npx cap sync ios`まで実施済み
-- [x] Xcodeインストール済み（バージョン26.6を確認）
+- [x] `npm run ios:sync` / `npm run ios:open` / `npm run ios:assets` スクリプトを整備
+- [x] `capacitor.config.ts`の`server.url`を本番カスタムドメイン **https://www.myantenna.app** に設定済み
+- [x] Apple Developer Program登録済み（Team ID: `WAY9789685`）
+- [x] App Store Connectでアプリ作成済み（Bundle ID: `com.interestdashboard.app`）
+- [x] TestFlight・App Store Connectへのビルドアップロード運用が確立済み（後述）
+- [x] App Store審査への提出運用が確立済み（審査状況は随時変動するため、最新状況はApp Store Connectで確認してください）
 
-**Webアプリとしては、この本番URLに誰でもアクセスできる状態になっています。**
-アカウント登録・トピック登録・マイページの動作を、まずはブラウザで一度確認しておくことをおすすめします。
-
-## ここから先、あなたに行っていただく必要がある作業
-
-Apple IDでの署名・実機での実行は、Xcodeを操作する必要があるため私だけでは進められません。
-
-### 1. プロジェクトを開いて実行
+## ローカルで実機・シミュレータで動かしたい場合
 
 ```bash
 npm run ios:open
 ```
 
 Xcodeが開きます。左側のプロジェクトナビゲータで `App` ターゲット →
-「Signing & Capabilities」タブを開き、以下を設定してください。
+「Signing & Capabilities」タブで、Teamが正しく設定されていることを確認してください
+（すでに`WAY9789685`で構成済みです）。
 
-- **Team**: あなたのApple ID（無料のPersonal Teamで、自分のiPhoneで動かすだけなら十分です）
-- 初回はApple IDの追加が必要な場合があります（Xcode → Settings → Accounts）
-
-その後、上部の実行先を「あなたのiPhone」（USB接続、または同じWi-Fiで無線）か
+上部の実行先を「あなたのiPhone」（USB接続、または同じWi-Fiで無線）か
 「iPhoneのシミュレータ」に選び、▶ボタンで実行します。
 実機の場合、初回は iPhone側の「設定 → 一般 → VPNとデバイス管理」で開発者を信頼する操作が必要です。
 
-無料のApple IDでの実機インストールは7日間で失効し、再度Xcodeから実行し直す必要がある制限が
-あります（Apple Developer Program、年間$99に登録すると1年間有効になり、TestFlightやApp Store
-配信もできるようになります）。
+## 新しいビルドをApp Store Connectへ提出する手順
 
-### 2. （将来的に）App Storeで配信したい場合
+Web側の修正（`Vercel --prod`でのデプロイ）だけでは、**すでにインストール・審査提出済みのアプリには反映されますが、新しいバイナリとしての再提出そのものは別途必要**です（Apple審査の却下対応や、`capacitor.config.ts`自体の変更を含む場合など）。
 
-- Apple Developer Program（年間$99）への登録
-- App Store Connectでアプリを作成（プライバシーポリシーURL・スクリーンショット・審査情報等が必要）
-- TestFlightでの内部テスト → 審査提出
+1. `ios/App/App.xcodeproj/project.pbxproj`の`CURRENT_PROJECT_VERSION`（ビルド番号）を、既存のTestFlightビルドと重複しない値に上げる（`MARKETING_VERSION`はそのままでよい）
+2. `npm run ios:sync`でCapacitor設定をXcodeプロジェクトへ反映
+3. `npm run ios:open`でXcodeを開く
+4. 実行先を **「Any iOS Device (arm64)」** に切り替える（実機・シミュレータのままだとArchiveメニューが選べない）
+5. メニューバー → **Product → Archive**
+6. ビルド完了後、自動的に開く「Organizer」ウィンドウで対象アーカイブを選択 → **Distribute App**
+7. 配布方法「App Store Connect」→「Upload」を選択し、デフォルト設定のままアップロード
+8. アップロード後、App Store Connect側でビルドの処理完了（10〜30分程度）を待つ
+9. App Store Connect → 対象アプリ → 配信 → 該当バージョンのページで、処理済みビルドを選択
+10. 初回または久しぶりの提出の場合、輸出コンプライアンス（暗号化に関する質問）に回答が必要になることがある。このアプリはOS標準のHTTPS通信のみを使用しており独自の暗号化は実装していないため、「標準的な暗号化アルゴリズム」を選択する
+11. 「App Review情報」のメモ欄・サインイン情報（審査用デモアカウント）を必要に応じて更新
+12. 「審査へ提出」
 
-このあたりは登録が完了してから、改めて一緒に進めましょう。
+## App Store審査について
+
+- 却下・追加情報要求への対応履歴や、審査ガイドラインごとの対応方針はプロジェクトの会話ログ・コミット履歴を参照してください
+- よくある却下理由と対応:
+  - **Guideline 5.1.1(v)（アカウント削除）**: アプリ内（設定画面）から完結する削除導線を実装済み
+  - **Guideline 2.1（追加情報要求）**: アプリの説明・外部サービス一覧・デモアカウント等をApp Review情報欄に記載する運用
+  - **Guideline 4.3(a)（スパム判定）**: Capacitorの`server.url`方式（Webサイトをそのままラップする構成）は、Appleの自動類似性検出に引っかかりやすい技術的特徴を持つ。実際にオリジナルな機能（AIによる情報源自動発掘・パーソナライズ推薦等）を持つことを、審査への返信で具体的に説明する必要がある場合がある
 
 ## 今後、Webアプリ側を更新したとき
 
 `server.url`方式のため、**Webアプリ（Vercel側）を更新してデプロイし直すだけで、
-インストール済みのiPhoneアプリにも自動的に反映されます**。Xcodeでの再ビルドは、
-アイコン・アプリ名・ネイティブ機能（プッシュ通知等）を変更したときだけ必要になります。
+インストール済みのiPhoneアプリにも自動的に反映されます**。Xcodeでの再ビルド・再提出は、
+アイコン・アプリ名・`capacitor.config.ts`自体の変更・ネイティブ機能（プッシュ通知等）の
+追加など、ネイティブ側の変更を伴うときだけ必要になります。
