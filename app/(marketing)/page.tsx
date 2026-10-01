@@ -1,6 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-export default function TopPage() {
+// ログイン済みのユーザーがトップページ（Capacitorアプリ起動時に開かれるURL）に
+// 来た場合は、案内画面を見せずそのままマイページへ送る。app/(app)/layout.tsxの
+// 「未ログインなら/loginへ」の逆のガードで、「アプリを開くたびにログインし直す
+// のが面倒」という指摘への対応（レビュー指摘: セッション自体は維持されていても、
+// このページが常にログイン前の案内を表示する作りだったため、再ログインが
+// 必要なように見えていた）。
+export default async function TopPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/mypage");
+  }
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
       <div className="flex max-w-xl flex-col items-center gap-6">

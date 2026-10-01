@@ -1,7 +1,19 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { SignupForm } from "@/components/auth/SignupForm";
+import { createClient } from "@/lib/supabase/server";
 
-export default function SignupPage() {
+// 既にログイン済みのままこの画面に来た場合も、フォームを見せずマイページへ送る。
+export default async function SignupPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/mypage");
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">

@@ -1,7 +1,20 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { createClient } from "@/lib/supabase/server";
 
-export default function LoginPage() {
+// 既にログイン済みのままこの画面に来た場合（トップページ経由以外でのアクセス等）も、
+// フォームを見せずマイページへ送る。
+export default async function LoginPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/mypage");
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
