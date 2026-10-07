@@ -396,6 +396,10 @@ export function TopicsPageClient({
     }
   }
 
+  function handleTopicChange(topic: Topic) {
+    setTopics((prev) => prev.map((t) => (t.id === topic.id ? topic : t)));
+  }
+
   async function handleDelete(topicId: string) {
     setError(null);
     try {
@@ -652,6 +656,7 @@ export function TopicsPageClient({
         onTogglePreferencesForm={setEditingPreferencesTopicId}
         onSavePreferences={handleSavePreferences}
         onSourceStatusChange={handleSourceStatusChange}
+        onTopicChange={handleTopicChange}
       />
     </div>
   );

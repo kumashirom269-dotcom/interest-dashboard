@@ -8,6 +8,7 @@ import { SourceCard } from "@/components/sources/SourceCard";
 import { TOPIC_ENTITY_TYPE_LABELS } from "@/lib/topic-classification/types";
 import type { TopicClassification } from "@/lib/topic-classification/types";
 import { TopicPreferencesForm } from "./TopicPreferencesForm";
+import { PublishAntennaControl } from "./PublishAntennaControl";
 import { DEV_TOOLS_ENABLED } from "@/lib/config/devTools";
 import {
   DESIRED_CONTENT_TYPE_LABELS,
@@ -42,6 +43,7 @@ interface TopicListProps {
   onTogglePreferencesForm: (topicId: string | null) => void;
   onSavePreferences: (topicId: string, input: TopicPreferenceSettingsInput) => void;
   onSourceStatusChange: (sourceId: string, status: SourceStatus) => void;
+  onTopicChange: (topic: Topic) => void;
 }
 
 function ClassificationResult({
@@ -278,6 +280,7 @@ interface TopicCardProps {
   onTogglePreferencesForm: (topicId: string | null) => void;
   onSavePreferences: (topicId: string, input: TopicPreferenceSettingsInput) => void;
   onSourceStatusChange: (sourceId: string, status: SourceStatus) => void;
+  onTopicChange: (topic: Topic) => void;
 }
 
 // 一覧では「何個・何を登録していて、要る/要らないを判断しやすいか」を優先し、
@@ -303,10 +306,12 @@ function TopicCard({
   onTogglePreferencesForm,
   onSavePreferences,
   onSourceStatusChange,
+  onTopicChange,
 }: TopicCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
+    <div className="flex flex-col gap-2">
     <Card className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -439,6 +444,8 @@ function TopicCard({
         </div>
       )}
     </Card>
+    <PublishAntennaControl topic={topic} onChange={onTopicChange} />
+    </div>
   );
 }
 
@@ -460,6 +467,7 @@ export function TopicList({
   onTogglePreferencesForm,
   onSavePreferences,
   onSourceStatusChange,
+  onTopicChange,
 }: TopicListProps) {
   if (topics.length === 0) {
     return (
@@ -491,6 +499,7 @@ export function TopicList({
           onTogglePreferencesForm={onTogglePreferencesForm}
           onSavePreferences={onSavePreferences}
           onSourceStatusChange={onSourceStatusChange}
+          onTopicChange={onTopicChange}
         />
       ))}
     </div>

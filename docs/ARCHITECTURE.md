@@ -11,7 +11,8 @@
 5. [33ジャンル統合エンジン（安全機構）](#33ジャンル統合エンジン安全機構)
 6. [情報源の信頼性・スコアリング](#情報源の信頼性スコアリング)
 7. [収集パイプラインのエラーハンドリング](#収集パイプラインのエラーハンドリング)
-8. [iOSアプリのアーキテクチャ](#iosアプリのアーキテクチャ)
+8. [公開アンテナ（公開・フォロー・コピー）](#公開アンテナ公開フォローコピー)
+9. [iOSアプリのアーキテクチャ](#iosアプリのアーキテクチャ)
 
 ---
 
@@ -144,6 +145,35 @@ RSS由来の記事について、トピックとの関係が伝わるようタ�
 - RSS取得の失敗は`sources.fetch_status`（`unverified`/`verified`/`broken`）と`last_fetch_error_type`/`last_fetch_error_message`に記録
 - `consecutive_fetch_failure_count`（連続失敗回数）を記録し、**3回以上連続で失敗した場合のみ**「URLを見直すか一時停止することをおすすめします」という導線付きの警告に切り替える（1〜2回は一時的な不調とみなし通常表示のまま）。自動での一時停止・削除は行わず、常にユーザーの操作を介する設計（[components/sources/SourceCard.tsx](../components/sources/SourceCard.tsx)参照）
 - RSS取得・Brave検索クエリ・公式サイトクロール等の収集ループは`Promise.all`で並列化済み
+
+## 公開アンテナ（公開・フォローコピー）
+
+トピック（UI上の「アンテナ」）を公開し、未ログインの第三者にも共有できる機能。内部のデータモデルは`topics`のままで、UI上の呼称だけを「アンテナ」としている（破壊的な名称変更は行っていない）。
+
+### データモデル
+
+- `topics`に`is_public`・`slug`・`public_title`・`public_description`・`published_at`・`copied_from_topic_id`を追加（[supabase/migrations/0051_public_antenna.sql](../supabase/migrations/0051_public_antenna.sql)）。`is_public`は`default false`のため、既存トピックは移行後も自動的に非公開のまま
+- `topic_follows`: フォロー関係を表す中間テーブル（`user_id` + `topic_id`でunique）。1アンテナに対し多数のフォロワーが同じ収集結果を参照する構造で、**フォロワーごとに個別のAI収集は行わない**
+
+### 公開データの安全な読み取り
+
+既存の非公開データのRLS（`user_id`ベース、[0002_rls.sql](../supabase/migrations/0002_rls.sql)）には一切手を加えていない。公開アンテナの読み取りは、`lib/debug-api/`と同じ「security definerなPostgres関数で、ホワイトリストした列だけをjsonbで返す」パターンを踏襲した`get_public_antenna(slug)`関数（anon/authenticatedに実行権限を付与）経由に限定している。この関数は:
+
+- `is_public = true`のトピックのみを対象にする
+- `user_id`・内部AI判定データ・`source_reliability_score`等の内部スコア・デバッグ情報は一切返さない
+- フォロワー一覧は誰にも見せず、`count(*)`による集計値のみ返す
+- 呼び出し元が所有者か・フォロー済みかは、`user_id`そのものではなく`auth.uid()`との比較結果（boolean）としてのみ返す（`is_owner`・`is_following`）
+
+トップページの「公開中のアンテナ」導線用に、同じ方針の`list_recent_public_antennas(limit)`関数も用意している。
+
+### フォロー・コピー
+
+- フォロー/解除は`app/(app)/topics/actions.ts`の`followTopic`/`unfollowTopic`。自分自身のアンテナへのフォロー・二重フォローはサーバー側で拒否する
+- コピー（`copyPublicAntenna`）は、`get_public_antenna()`で取得できる公開範囲の情報（タイトル・説明・情報源の名前/URL/種別）のみを元に、呼び出しユーザー所有の新規`topics`/`sources`行を作成する。特別な権限昇格は不要（通常の「自分の行のinsert」のRLSで完結する）。`reactions`・`source_score_logs`等の個人的な履歴・内部スコアはコピーしない
+
+### ログイン後の戻り先（open redirect対策）
+
+未ログインユーザーが公開アンテナでフォロー・コピーを押すと`/login?next=/a/[slug]`へ誘導し、ログイン後に元のページへ戻す。`next`パラメータは[lib/auth/safeNextPath.ts](../lib/auth/safeNextPath.ts)で「`/`始まり・`//`では始まらない」もののみ許可しており、外部ドメインへのopen redirectを防いでいる。
 
 ## iOSアプリのアーキテクチャ
 

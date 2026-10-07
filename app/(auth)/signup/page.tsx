@@ -2,16 +2,25 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPath } from "@/lib/auth/safeNextPath";
+
+interface SignupPageProps {
+  searchParams: Promise<{ next?: string }>;
+}
 
 // 既にログイン済みのままこの画面に来た場合も、フォームを見せずマイページへ送る。
-export default async function SignupPage() {
+// next対応についてはapp/(auth)/login/page.tsxと同じ方針。
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const { next } = await searchParams;
+  const nextPath = safeNextPath(next) ?? "/mypage";
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect("/mypage");
+    redirect(nextPath);
   }
 
   return (

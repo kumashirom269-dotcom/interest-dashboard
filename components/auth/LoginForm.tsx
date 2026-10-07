@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, type SubmitEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { createClient } from "@/lib/supabase/client";
 import { waitForSessionReady } from "@/lib/supabase/waitForSessionReady";
+import { safeNextPath } from "@/lib/auth/safeNextPath";
 
 // ログイン処理は「Supabaseへの認証」→「セッション反映待ち」→「画面遷移」の
 // 複数段階からなる（レビュー指摘: ボタンを押した後、何が起きているのか
@@ -20,6 +21,8 @@ const PHASE_LABELS: Record<Exclude<LoginPhase, "idle">, string> = {
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next")) ?? "/mypage";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,7 +52,7 @@ export function LoginForm() {
       // （lib/supabase/waitForSessionReady.ts参照。SignupForm.tsxと同種の対策）。
       setPhase("navigating");
       await waitForSessionReady(supabase);
-      router.push("/mypage");
+      router.push(nextPath);
       router.refresh();
       // ここでphaseを"idle"へ戻さない: 成功時はこのコンポーネント自体が
       // 画面遷移によってアンマウントされる想定のため、あえて「移動しています...」

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, type SubmitEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { createClient } from "@/lib/supabase/client";
 import { waitForSessionReady } from "@/lib/supabase/waitForSessionReady";
+import { safeNextPath } from "@/lib/auth/safeNextPath";
 
 // メール内リンク方式（クリック確認）は、メールアプリの自動スキャン機能
 // （Gmail等が安全性確認のためリンクを事前に一度読み込んでしまう）により、
@@ -42,6 +43,8 @@ const VERIFY_PHASE_LABELS: Record<Exclude<VerifyPhase, "idle">, string> = {
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next")) ?? "/mypage";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -78,7 +81,7 @@ export function SignupForm() {
       if (data.session) {
         // メール確認が不要な設定の場合、signUp直後にセッションが張られる
         setSubmitPhase("navigating");
-        router.push("/mypage");
+        router.push(nextPath);
         router.refresh();
         return;
       }
@@ -125,7 +128,7 @@ export function SignupForm() {
 
       setVerifyPhase("navigating");
       await waitForSessionReady(supabase);
-      router.push("/mypage");
+      router.push(nextPath);
       router.refresh();
       // ここでverifyPhaseを"idle"へ戻さない: 成功時はこのコンポーネント自体が
       // 画面遷移によってアンマウントされる想定のため、あえて「移動しています...」

@@ -119,6 +119,12 @@ interface TopicRow {
   description: string | null;
   keywords: string[] | null;
   last_collected_at: string | null;
+  is_public: boolean | null;
+  slug: string | null;
+  public_title: string | null;
+  public_description: string | null;
+  published_at: string | null;
+  copied_from_topic_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +137,12 @@ function mapTopicRow(row: TopicRow): Topic {
     description: row.description ?? "",
     keywords: row.keywords ?? [],
     last_collected_at: row.last_collected_at,
+    is_public: row.is_public ?? false,
+    slug: row.slug,
+    public_title: row.public_title,
+    public_description: row.public_description,
+    published_at: row.published_at,
+    copied_from_topic_id: row.copied_from_topic_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -201,6 +213,246 @@ export async function deleteTopic(topicId: string): Promise<void> {
   if (error) throw error;
 
   revalidatePath("/topics");
+}
+
+// ============================================================
+// 公開アンテナ（Antenna 2.0 第1フェーズ）
+// ============================================================
+
+// 推測不可なURL安全slugを生成する。日本語タイトルの翻字は行わず、ランダムな
+// 英数字のみで構成する（衝突時はinsert側でリトライする前提の単純な実装）。
+function generatePublicSlug(): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+}
+
+export interface PublishTopicInput {
+  publicTitle: string;
+  publicDescription: string;
+}
+
+// トピックを公開する。公開タイトル・説明が空の場合は既存のname/descriptionを
+// そのまま使う（二重管理を増やさないという指示書の方針）。slugは衝突した場合
+// 数回リトライする（unique indexにより衝突時はinsert/updateがエラーになるため、
+// それを検知して再試行する）。
+export async function publishTopic(
+  topicId: string,
+  input: PublishTopicInput,
+): Promise<Topic> {
+  const { supabase, userId } = await getAuthedUserId();
+
+  const { data: current, error: currentError } = await supabase
+    .from("topics")
+    .select("slug")
+    .eq("id", topicId)
+    .eq("user_id", userId)
+    .single();
+  if (currentError) throw currentError;
+
+  const slug = current.slug ?? generatePublicSlug();
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidateSlug = attempt === 0 ? slug : generatePublicSlug();
+    const { data, error } = await supabase
+      .from("topics")
+      .update({
+        is_public: true,
+        slug: candidateSlug,
+        public_title: input.publicTitle.trim() || null,
+        public_description: input.publicDescription.trim() || null,
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", topicId)
+      .eq("user_id", userId)
+      .select()
+      .single();
+
+    if (!error) {
+      revalidatePath("/topics");
+      return mapTopicRow(data);
+    }
+    // unique_violation（slug重複）以外のエラーはそのまま投げる
+    if (error.code !== "23505") throw error;
+  }
+
+  throw new Error("公開URLの発行に失敗しました。もう一度お試しください。");
+}
+
+export async function unpublishTopic(topicId: string): Promise<Topic> {
+  const { supabase, userId } = await getAuthedUserId();
+
+  // slugはあえて消さない（再公開時に同じURLを使い回せるようにするため）。
+  // is_public=falseになった時点でget_public_antenna()からは参照できなくなる。
+  const { data, error } = await supabase
+    .from("topics")
+    .update({ is_public: false })
+    .eq("id", topicId)
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  revalidatePath("/topics");
+  return mapTopicRow(data);
+}
+
+// ============================================================
+// フォロー
+// ============================================================
+
+export async function followTopic(topicId: string): Promise<void> {
+  const { supabase, userId } = await getAuthedUserId();
+
+  const { data: topic, error: topicError } = await supabase
+    .from("topics")
+    .select("user_id, is_public")
+    .eq("id", topicId)
+    .single();
+  if (topicError) throw topicError;
+  if (!topic.is_public) throw new Error("公開されていないアンテナです。");
+  if (topic.user_id === userId) {
+    throw new Error("自分自身のアンテナはフォローできません。");
+  }
+
+  const { error } = await supabase
+    .from("topic_follows")
+    .insert({ user_id: userId, topic_id: topicId });
+  // 既にフォロー済み（unique制約違反）は成功扱いにする（二重フォロー連打対策）。
+  if (error && error.code !== "23505") throw error;
+
+  revalidatePath("/topics");
+}
+
+export async function unfollowTopic(topicId: string): Promise<void> {
+  const { supabase, userId } = await getAuthedUserId();
+
+  const { error } = await supabase
+    .from("topic_follows")
+    .delete()
+    .eq("user_id", userId)
+    .eq("topic_id", topicId);
+
+  if (error) throw error;
+
+  revalidatePath("/topics");
+}
+
+export interface FollowedTopic {
+  topicId: string;
+  title: string;
+  description: string;
+  slug: string | null;
+  followedAt: string;
+}
+
+// 自分がフォローしているアンテナの一覧。get_public_antenna()と同じホワイトリスト
+// 方針で、フォロー先の非公開情報（user_id・内部スコア等）には一切触れない設計
+// （topic_followsとtopicsのpublicな列のみを結合する）。
+export async function getFollowedTopicsForUser(): Promise<FollowedTopic[]> {
+  const { supabase, userId } = await getAuthedUserId();
+
+  const { data, error } = await supabase
+    .from("topic_follows")
+    .select("topic_id, created_at, topics(public_title, name, public_description, description, is_public, slug)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? [])
+    .filter((row) => {
+      const topic = row.topics as unknown as { is_public: boolean } | null;
+      return topic?.is_public;
+    })
+    .map((row) => {
+      const topic = row.topics as unknown as {
+        public_title: string | null;
+        name: string;
+        public_description: string | null;
+        description: string | null;
+        slug: string | null;
+      };
+      return {
+        topicId: row.topic_id,
+        title: topic.public_title || topic.name,
+        description: topic.public_description || topic.description || "",
+        slug: topic.slug,
+        followedAt: row.created_at,
+      };
+    });
+}
+
+// ============================================================
+// コピー
+// ============================================================
+
+// 公開アンテナ（get_public_antenna()で取得できる範囲の情報のみ）を元に、
+// 呼び出しユーザー所有の新しいトピックとして複製する。reactions・
+// source_score_logs・内部スコア等の個人的な履歴・private metadataはコピーしない
+// （指示書9章の方針）。情報源は名前・URL・種別のみ複製し、信頼度スコア等は
+// 新規作成時のデフォルト値から再スタートする。
+export async function copyPublicAntenna(slug: string): Promise<Topic> {
+  const { supabase, userId } = await getAuthedUserId();
+
+  const { data: publicData, error: rpcError } = await supabase.rpc(
+    "get_public_antenna",
+    { p_slug: slug },
+  );
+  if (rpcError) throw rpcError;
+  if (!publicData) throw new Error("このアンテナは見つかりませんでした。");
+
+  const { data: sourceTopic, error: sourceTopicError } = await supabase
+    .from("topics")
+    .select("id, user_id")
+    .eq("slug", slug)
+    .eq("is_public", true)
+    .single();
+  if (sourceTopicError) throw sourceTopicError;
+  if (sourceTopic.user_id === userId) {
+    throw new Error("自分自身のアンテナはコピーできません。");
+  }
+
+  const publicAntenna = publicData as {
+    title: string;
+    description: string;
+    sources: { name: string; url: string; source_type: string }[];
+  };
+
+  const { data: newTopic, error: insertError } = await supabase
+    .from("topics")
+    .insert({
+      user_id: userId,
+      name: publicAntenna.title,
+      description: publicAntenna.description,
+      keywords: [],
+      copied_from_topic_id: sourceTopic.id,
+      is_public: false,
+    })
+    .select()
+    .single();
+  if (insertError) throw insertError;
+
+  if (publicAntenna.sources.length > 0) {
+    const { error: sourcesError } = await supabase.from("sources").insert(
+      publicAntenna.sources.map((s) => ({
+        user_id: userId,
+        topic_id: newTopic.id,
+        name: s.name,
+        url: s.url,
+        source_type: s.source_type,
+        status: "active",
+        reason: "公開アンテナからのコピー",
+        created_by_ai: false,
+      })),
+    );
+    // 情報源の複製に失敗してもトピック自体の作成は成功させる（部分失敗を許容）。
+    if (sourcesError) {
+      console.error("[copyPublicAntenna] sources insert failed:", sourcesError.message);
+    }
+  }
+
+  revalidatePath("/topics");
+  return mapTopicRow(newTopic);
 }
 
 // トピック登録フローのレート制限（一般公開に向けた対応）。

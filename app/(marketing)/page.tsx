@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getRecentPublicAntennas } from "@/lib/public-antenna/queries";
 
 // ログイン済みのユーザーがトップページ（Capacitorアプリ起動時に開かれるURL）に
 // 来た場合は、案内画面を見せずそのままマイページへ送る。app/(app)/layout.tsxの
@@ -17,6 +18,8 @@ export default async function TopPage() {
   if (user) {
     redirect("/mypage");
   }
+
+  const recentAntennas = await getRecentPublicAntennas(6);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
@@ -59,6 +62,28 @@ export default async function TopPage() {
             プライバシーポリシー
           </Link>
         </div>
+
+        {recentAntennas.length > 0 && (
+          <div className="mt-6 flex w-full flex-col items-center gap-3">
+            <h2 className="text-sm font-semibold text-slate-500">公開中のアンテナ</h2>
+            <div className="flex w-full flex-col gap-2">
+              {recentAntennas.map((antenna) => (
+                <Link
+                  key={antenna.slug}
+                  href={`/a/${antenna.slug}`}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="font-medium text-slate-900">{antenna.title}</span>
+                  {antenna.description && (
+                    <span className="block truncate text-xs text-slate-500">
+                      {antenna.description}
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

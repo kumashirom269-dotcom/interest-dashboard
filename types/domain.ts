@@ -51,6 +51,14 @@ export interface Topic {
   // 自動収集パイプライン（トピック登録直後の初期探索・将来のマイページ再収集判定）を
   // 最後に実行した日時。まだ一度も実行していない場合はnull。
   last_collected_at: string | null;
+  // 公開アンテナ（/a/[slug]）関連。is_publicはdefault falseで、既存トピックは
+  // 移行後も自動的に非公開のまま（supabase/migrations/0051_public_antenna.sql）。
+  is_public: boolean;
+  slug: string | null;
+  public_title: string | null;
+  public_description: string | null;
+  published_at: string | null;
+  copied_from_topic_id: string | null;
   created_at: string;
   updated_at: string;
 }

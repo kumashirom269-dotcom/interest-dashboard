@@ -2,17 +2,27 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPath } from "@/lib/auth/safeNextPath";
+
+interface LoginPageProps {
+  searchParams: Promise<{ next?: string }>;
+}
 
 // 既にログイン済みのままこの画面に来た場合（トップページ経由以外でのアクセス等）も、
-// フォームを見せずマイページへ送る。
-export default async function LoginPage() {
+// フォームを見せずマイページへ送る。公開アンテナでフォロー・コピーしようとした
+// 未ログインユーザーを/login?next=/a/xxxのように誘導した場合は、ログイン済み
+// 判定時もその行き先を尊重する（lib/auth/safeNextPath.ts参照）。
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { next } = await searchParams;
+  const nextPath = safeNextPath(next) ?? "/mypage";
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect("/mypage");
+    redirect(nextPath);
   }
 
   return (
