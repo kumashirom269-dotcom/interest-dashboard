@@ -300,23 +300,30 @@ export async function unpublishTopic(topicId: string): Promise<Topic> {
 // フォロー
 // ============================================================
 
-export async function followTopic(topicId: string): Promise<void> {
+// topicIdではなくslugを受け取る。他人のトピック行は通常のRLSでは読めない
+// （自分のものしか見えない設計のため）ので、以前作った安全な読み取り専用関数
+// get_public_antenna()経由でid・is_ownerを取得する（copyPublicAntennaと同じ方針）。
+// 直接public.topicsをselectしようとすると、非公開の他人の行として扱われ
+// 0件になり"Cannot coerce the result to a single JSON object"エラーになる
+// （実機検証で発覚した不具合の修正）。
+export async function followTopic(slug: string): Promise<void> {
   const { supabase, userId } = await getAuthedUserId();
 
-  const { data: topic, error: topicError } = await supabase
-    .from("topics")
-    .select("user_id, is_public")
-    .eq("id", topicId)
-    .single();
-  if (topicError) throw topicError;
-  if (!topic.is_public) throw new Error("公開されていないアンテナです。");
-  if (topic.user_id === userId) {
+  const { data: publicData, error: rpcError } = await supabase.rpc(
+    "get_public_antenna",
+    { p_slug: slug },
+  );
+  if (rpcError) throw rpcError;
+  if (!publicData) throw new Error("公開されていないアンテナです。");
+
+  const antenna = publicData as { id: string; is_owner: boolean };
+  if (antenna.is_owner) {
     throw new Error("自分自身のアンテナはフォローできません。");
   }
 
   const { error } = await supabase
     .from("topic_follows")
-    .insert({ user_id: userId, topic_id: topicId });
+    .insert({ user_id: userId, topic_id: antenna.id });
   // 既にフォロー済み（unique制約違反）は成功扱いにする（二重フォロー連打対策）。
   if (error && error.code !== "23505") throw error;
 
@@ -401,22 +408,20 @@ export async function copyPublicAntenna(slug: string): Promise<Topic> {
   if (rpcError) throw rpcError;
   if (!publicData) throw new Error("このアンテナは見つかりませんでした。");
 
-  const { data: sourceTopic, error: sourceTopicError } = await supabase
-    .from("topics")
-    .select("id, user_id")
-    .eq("slug", slug)
-    .eq("is_public", true)
-    .single();
-  if (sourceTopicError) throw sourceTopicError;
-  if (sourceTopic.user_id === userId) {
-    throw new Error("自分自身のアンテナはコピーできません。");
-  }
-
+  // 他人のトピック行は通常のRLSでは読めないため、id・is_ownerも
+  // get_public_antenna()の戻り値からそのまま使う（followTopicと同じ方針。
+  // 以前は直接public.topicsをselectしており、実機検証でエラーが発覚した）。
   const publicAntenna = publicData as {
+    id: string;
     title: string;
     description: string;
+    is_owner: boolean;
     sources: { name: string; url: string; source_type: string }[];
   };
+
+  if (publicAntenna.is_owner) {
+    throw new Error("自分自身のアンテナはコピーできません。");
+  }
 
   const { data: newTopic, error: insertError } = await supabase
     .from("topics")
@@ -425,7 +430,7 @@ export async function copyPublicAntenna(slug: string): Promise<Topic> {
       name: publicAntenna.title,
       description: publicAntenna.description,
       keywords: [],
-      copied_from_topic_id: sourceTopic.id,
+      copied_from_topic_id: publicAntenna.id,
       is_public: false,
     })
     .select()

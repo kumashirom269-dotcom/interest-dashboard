@@ -64,7 +64,7 @@ export function PublicAntennaActions({
         await unfollowTopic(topicId);
         setIsFollowing(false);
       } else {
-        await followTopic(topicId);
+        await followTopic(slug);
         setIsFollowing(true);
       }
     } catch (e) {
