@@ -358,35 +358,46 @@ export interface FollowedTopic {
 export async function getFollowedTopicsForUser(): Promise<FollowedTopic[]> {
   const { supabase, userId } = await getAuthedUserId();
 
-  const { data, error } = await supabase
+  const { data: follows, error } = await supabase
     .from("topic_follows")
-    .select("topic_id, created_at, topics(public_title, name, public_description, description, is_public, slug)")
+    .select("topic_id, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
+  if (!follows || follows.length === 0) return [];
 
-  return (data ?? [])
-    .filter((row) => {
-      const topic = row.topics as unknown as { is_public: boolean } | null;
-      return topic?.is_public;
-    })
-    .map((row) => {
-      const topic = row.topics as unknown as {
-        public_title: string | null;
-        name: string;
-        public_description: string | null;
-        description: string | null;
-        slug: string | null;
-      };
+  // フォロー先は他人のトピックであることが前提のため、通常のjoinでは
+  // RLSに阻まれて読めない（topics_select_ownは自分の行のみ許可）。
+  // get_public_antenna()と同じ方針のget_topics_public_info()経由で解決する
+  // （実機検証で発覚した不具合の修正。詳細はmigration 0053のコメント参照）。
+  const { data: publicInfoData, error: rpcError } = await supabase.rpc(
+    "get_topics_public_info",
+    { p_topic_ids: follows.map((f) => f.topic_id) },
+  );
+  if (rpcError) throw rpcError;
+
+  const publicInfoList = (publicInfoData ?? []) as {
+    id: string;
+    title: string;
+    description: string;
+    slug: string | null;
+  }[];
+  const publicInfoById = new Map(publicInfoList.map((t) => [t.id, t]));
+
+  return follows
+    .map((follow) => {
+      const info = publicInfoById.get(follow.topic_id);
+      if (!info) return null; // 非公開化・削除されたフォロー先は一覧に出さない
       return {
-        topicId: row.topic_id,
-        title: topic.public_title || topic.name,
-        description: topic.public_description || topic.description || "",
-        slug: topic.slug,
-        followedAt: row.created_at,
+        topicId: follow.topic_id,
+        title: info.title,
+        description: info.description,
+        slug: info.slug,
+        followedAt: follow.created_at,
       };
-    });
+    })
+    .filter((t): t is FollowedTopic => t !== null);
 }
 
 // ============================================================
